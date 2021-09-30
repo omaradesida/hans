@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 #for converting hs_alkane boxes to ASE atoms objects
 from ase import Atoms
 #from ase.visualize import view
-import ase
+from ase.io import write as asewrite
 
 def mk_ase_config(ibox, Nbeads, Nchains):
     'Uses the current state of the alkane model to construct an ASE atoms object'
@@ -190,18 +190,7 @@ def box_stretch_step(ibox, step_size):
     return boltz, delta_H
 
 
-#populating boxes
-ncopy = nchains
-for ibox in range(1,nwalkers+1):
-    for ichain in range(1,ncopy+1):
-        rb_factor = 0
-        mdl.alkane_set_nchains(ichain)
-        overlap_flag = 1
-        while overlap_flag != 0:
-            rb_factor, ifail = mdl.alkane_grow_chain(ichain,ibox,1)         
-#             if ifail != 0:
-#                 rb_factor = 0
-            overlap_flag = mdl.alkane_check_chain_overlap(ibox)
+
 
         
 def MC_run(sweeps, move_ratio, ibox, volume_limit = sys.float_info.max):
@@ -215,7 +204,7 @@ def MC_run(sweeps, move_ratio, ibox, volume_limit = sys.float_info.max):
     move_prob = np.cumsum(move_ratio)/np.sum(move_ratio)
     while isweeps < sweeps:
         imove=0
-        while imove< nchains+7:
+        while imove< moves_per_sweep:
 #             clone_walker(ibox,nwalkers+2)#backup box
             ichain = np.random.randint(0, high=nchains) # picks a chain at random
             #should it be from 0 to nchains?
@@ -225,7 +214,7 @@ def MC_run(sweeps, move_ratio, ibox, volume_limit = sys.float_info.max):
             if xi < move_prob[ivol]:
                 # Attempt a volume move
                 itype = ivol
-                clone_walker(ibox, volume_box) #backing up the volume
+                #clone_walker(ibox, volume_box) #backing up the volume
                 boltz = mdl.alkane_box_resize(pressure, ibox, 0)
                 moves_attempted[itype] += 1
             elif xi < move_prob[itrans]:
@@ -278,8 +267,8 @@ def MC_run(sweeps, move_ratio, ibox, volume_limit = sys.float_info.max):
 #                         sys.exit()
                 else:
                     #revert volume move
-                    clone_walker(volume_box, ibox)
-                    #dumboltz = mdl.alkane_box_resize(pressure, ibox, 1)
+                    #clone_walker(volume_box, ibox)
+                    dumboltz = mdl.alkane_box_resize(pressure, ibox, 1)
 #                     if nan_check(ibox):
 #                         print(f"NAN rejected trying to revert {move_types[itype]} move")
 #                         sys.exit()
@@ -456,21 +445,37 @@ def adjust_dstretch(ibox,active_box, lower_bound,upper_bound):
 
         
 
-pwd = (!pwd)
-pwd = pwd[0]
+# pwd = !pwd
+# pwd = pwd[0]
+args = sys.argv
 
-nwalkers = 500
-active_box = nwalkers+1
-nchains = 32
-nbeads = 2
+nwalkers = int(args[1])
+nchains = int(args[2])
+nbeads = int(args[3])
+ns_iterations = int(float(args[4]))
+walk_length = int(args[5])
+
 max_vol_per_atom = 15
+active_box = nwalkers+1
 
-ns_iterations = int(2e5)
-walk_length = 50
+
+
+# ns_iterations = int(2e5)
+# walk_length = 50
+moves_per_sweep = 2*nchains+7 #1 move needed for each kind of move such that on average all moves are cycled over during a sweep
 
 aspect_ratio_limit = 0.8
 angle_limit_deg = 55
 angle_limit_rad = angle_limit_deg*np.pi/180
+
+#file handling
+file_prefix = f"NS_{nchains}_{nbeads}mer.{nwalkers}.{walk_length}"
+i_n = 1
+while os.path.exists(f"{file_prefix}.{i_n}.extxyz"):
+    i_n += 1
+
+traj_filename = f"{file_prefix}.{i_n}.extxyz"
+energies_filename = f"{file_prefix}.{i_n}.energies"
 
 
 mdl.box_set_num_boxes(nwalkers+1) #nwalkers+2 if debugging
@@ -490,6 +495,19 @@ mdl.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC move
 cell_matrix = 0.999*np.eye(3)*np.cbrt(nbeads*nchains*max_vol_per_atom)#*np.random.uniform(0,1)
 for ibox in range(1,nwalkers+1):
     mdl.box_set_cell(ibox,cell_matrix)
+    
+#populating boxes
+ncopy = nchains
+for ibox in range(1,nwalkers+1):
+    for ichain in range(1,ncopy+1):
+        rb_factor = 0
+        mdl.alkane_set_nchains(ichain)
+        overlap_flag = 1
+        while rb_factor == 0:
+            rb_factor, ifail = mdl.alkane_grow_chain(ichain,ibox,1)         
+            if ifail != 0:
+                rb_factor = 0
+            #overlap_flag = mdl.alkane_check_chain_overlap(ibox)
     
     
 #setting step sizes
@@ -539,7 +557,7 @@ for ibox in range(1,nwalkers+1):
 
 # main driver code
 
-
+print("nested_sampling run starts")
 #removed_volumes = []
 
 
@@ -548,23 +566,8 @@ low_acc_rate = 0.2
 high_acc_rate = 0.5 
 
 snapshots = 1000
-
 vis_interval = ns_iterations//snapshots
 
-filename = f"nested_sampling.{nwalkers}.1.extxyz"
-
-try:
-    os.remove(filename)
-except:
-    pass
-
-
-energies_filename = f"nested_sampling.{nwalkers}.1.energies"
-
-try:
-    os.remove(energies_filename)
-except:
-    pass
 
 energies_file = open(energies_filename, "w+")
 energies_file.write(f"{nwalkers} {1} {5*nchains} {False} {nchains} \n")
@@ -583,7 +586,7 @@ for i in range(ns_iterations):
     if i%vis_interval == 0:
         largest_config = mk_ase_config(index_max,nbeads,nchains)
         largest_config.wrap()
-        ase.io.write(filename,largest_config, append = True)
+        asewrite(traj_filename,largest_config, append = True)
 #         traj.write(largest_config)
 
 
@@ -613,10 +616,11 @@ for i in range(ns_iterations):
 #         pass
 
         
-    
+energies_file.close()
+
     
 
-    f.value+=1
+#     f.value+=1
 
 #traj.close()
 

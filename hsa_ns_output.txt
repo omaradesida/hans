@@ -1,0 +1,138 @@
+
+|=======================================|
+| Initialised   1 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised 501 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised    32 chains              |
+| Beads per chain :     2               |
+| Bead positions have been reset.       |
+|=======================================|
+
+
+|=======================================|
+| Initialised   1 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised 501 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised    32 chains              |
+| Beads per chain :     2               |
+| Bead positions have been reset.       |
+|=======================================|
+
+nested_sampling run starts
+
+|=======================================|
+| Initialised   1 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised *** simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised    32 chains              |
+| Beads per chain :     2               |
+| Bead positions have been reset.       |
+|=======================================|
+
+nested_sampling run starts
+
+|=======================================|
+| Initialised   1 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised 501 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised    32 chains              |
+| Beads per chain :     1               |
+| Bead positions have been reset.       |
+|=======================================|
+
+nested_sampling run starts
+
+|=======================================|
+| Initialised   1 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised 501 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised    32 chains              |
+| Beads per chain :     1               |
+| Bead positions have been reset.       |
+|=======================================|
+
+nested_sampling run starts
+
+|=======================================|
+| Initialised   1 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised 501 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised    32 chains              |
+| Beads per chain :     1               |
+| Bead positions have been reset.       |
+|=======================================|
+
+nested_sampling run starts
+
+|=======================================|
+| Initialised   1 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised 501 simulation box(es)    |
+| Cell vectors have been reset.         |
+|=======================================|
+
+
+|=======================================|
+| Initialised    32 chains              |
+| Beads per chain :     1               |
+| Bead positions have been reset.       |
+|=======================================|
+
