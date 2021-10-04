@@ -9,7 +9,11 @@ store the particle positions. One can run a nested sampling calculation using th
 using appropriate values for the arguments.
 
 `N_walkers`: How many walkers should be used for each run
+
 `N_chains`: How many chains should be used per simulation box.
+
 `N_beads`: How many beads there are in each chain. Note that a chain of length one will produce a box populated with spheres.
+
 `N_iter`: How many iterations of the nested sampling algorithm to be ran
+
 `steps_per_walk`: How many steps are performed when a random walker is cloned. Steps use MC moves to generate new configurations.
