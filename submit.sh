@@ -16,8 +16,8 @@
 
 # module load ASE/3.19.1-Python-3.7.4
 
-for i in {1 .. 2}
-do
-  srun python hs_alkane_NS.py 500 32 1 2e5 80 >> hsa_ns_output.txt
+
+
+srun python hs_alkane_NS.py 500 32 2 4e5 80 >> hsa_ns_output.txt
 #hs_alkane n_walkers n_chains n_beads n_iter steps_per_walk 
-done
+
