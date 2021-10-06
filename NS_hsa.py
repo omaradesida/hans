@@ -25,7 +25,7 @@ stretch_step_max = 0.5
 
 
 
-def mk_ase_config(ibox, Nbeads, Nchains):
+def mk_ase_config(ibox, Nbeads, Nchains, scaling = 3.75):
     'Uses the current state of the alkane model to construct an ASE atoms object'
     
     # Create and populate ASE object
@@ -37,7 +37,7 @@ def mk_ase_config(ibox, Nbeads, Nchains):
     
     confstring = "C"+str(Nbeads*Nchains)
     
-    box_config = Atoms(confstring, positions=model_positions*(1.5/0.4), pbc=True, cell=cell_vectors*(1.5/0.4))
+    box_config = Atoms(confstring, positions=model_positions*scaling, pbc=True, cell=cell_vectors*scaling)
 
 
     return box_config  # Returns ASE atom object
@@ -488,9 +488,11 @@ def populate_boxes(nwalkers,nchains):
                 if ifail != 0:
                     rb_factor = 0
 
-def shake_initial_configs(nwalkers, move_ratio):
+def shake_initial_configs(nwalkers, move_ratio, walk_length = 20):
+    
+    """ Runs a number of Monte Carlo steps on every simulation box, using the move_ratio assigned to it,
+    Checks for overlaps, and returns a dictionary which uses the number for each simulation box as the key for its volume"""
 
-    walk_length = 20
 
     volumes = {}
     start_volumes = []
@@ -502,5 +504,28 @@ def shake_initial_configs(nwalkers, move_ratio):
     overlap_check = np.zeros(nwalkers)
     for ibox in range(1,nwalkers+1):
         overlap_check[mdl.alkane_check_chain_overlap(ibox)]
+        
 
     return volumes
+
+
+def celltoxmolstring(atoms):
+    
+    """Outputs the cell of an atoms object as a string in a format which can be used to write .xmol files
+    
+    Arguments:
+        atoms: Atoms object for which a cell needs to be returned
+        
+    Returns:
+        cellstring: String containing the three vectors which compose the cell of the atoms object"""
+    
+    cell = atoms.cell
+    
+    if cell.size == 3:
+        cell *= np.eye(3)
+    
+    cellstring = np.array2string(atoms.cell.flatten(),
+                                  max_line_width=100,
+                                  formatter = {'float_kind':lambda x: "%.6f" % x})[1:-1]
+    
+    return cellstring

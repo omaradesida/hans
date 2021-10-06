@@ -18,6 +18,6 @@
 
 
 
-srun python hs_alkane_NS.py 500 32 2 4e5 80 >> hsa_ns_output.txt
-#hs_alkane n_walkers n_chains n_beads n_iter steps_per_walk 
+srun python hs_alkane_NS_restart_test.py -i 2e5 -w 500 -b 1 -c 32 -l 160 >> hsa_ns_output.txt
+ 
 
