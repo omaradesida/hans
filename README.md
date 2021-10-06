@@ -26,4 +26,4 @@ using appropriate values for the arguments.
                         foo.extxyz
 </pre>
 
-Simulations will generate an energies file which is compatible for use with `ns_analyse` from the `pymatnest` package. Note that as the system is athermal, the output isn't truly an energy and therefore it may be more accurate when performing analysis to examine the packing fraction of the chains. For this purpose, the intersecting spheres notebook has been written, which demonstrates how to obtain the volume for a chain, as well as an equation that one can use to calculate the volume for a chain of length $N$.
+Simulations will generate an energies file which is compatible for use with `ns_analyse` from the `pymatnest` package. Note that as the system is athermal, the output isn't truly an energy and therefore it may be more accurate when performing analysis to examine the packing fraction of the chains. For this purpose, the intersecting spheres notebook has been written, which demonstrates how to obtain the volume for a chain, as well as an equation that one can use to calculate the volume for a chain of length N.
