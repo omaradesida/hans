@@ -5,6 +5,10 @@ import sys
 import os
 import copy
 
+
+#for reading/writing
+import h5py
+
 import argparse #parse arguments
 
 
@@ -360,7 +364,7 @@ def clone_walker(ibox_original,ibox_clone):
         original_chain = mdl.alkane_get_chain(ichain,ibox_original)
         original_chain_copy = copy.deepcopy(original_chain)
         clone_chain = mdl.alkane_get_chain(ichain,ibox_clone)
-        for i in range(nbeads):
+        for ibead in range(nbeads):
 #             if np.isnan(original_chain_copy).any():
 #                 print("original","clone")
 #                 print(ibox_original, ibox_clone)
@@ -375,7 +379,7 @@ def clone_walker(ibox_original,ibox_clone):
 #                 print(original_chain)
                 
 #                 sys.exit()
-            clone_chain[i][:] = original_chain_copy[i][:]
+            clone_chain[ibead][:] = original_chain_copy[ibead][:]
     
     
     
@@ -529,3 +533,51 @@ def celltoxmolstring(atoms):
                                   formatter = {'float_kind':lambda x: "%.6f" % x})[1:-1]
     
     return cellstring
+
+def write_configs_to_hdf(nwalkers, filename = "configs.hdf5"):
+    """Write the coordinates of all hs_alkane boxes to a file. Default behavior is to overwrite previous data, 
+
+    Arguments:
+        filename (default = "configs.mol"): File to write atoms objects to.
+
+    """
+
+
+    f = h5py.File(filename, "w")
+
+    
+
+
+    nbeads = mdl.alkane_get_nbeads()
+    nchains = mdl.alkane_get_nchains()
+
+    for iwalker in range(1,nwalkers+1):
+        groupname = f"walker_{iwalker:04d}"
+        tempgrp = f.create_group(groupname)
+        coords = tempgrp.create_dataset("coordinates",(nbeads*nchains,3),dtype="float64")
+        unitcell = tempgrp.create_dataset("unitcell",(3,3),dtype="float64")
+
+        unitcell[:] = mdl.box_get_cell(iwalker)
+        for ichain in range(nchains):
+            chain = mdl.alkane_get_chain(ichain+1,iwalker)
+            coords[ichain*nbeads:ichain*nbeads+(nbeads), :] = chain
+
+    f.close()
+
+def read_configs_from_hdf(filename, nwalkers):
+
+    nbeads = mdl.alkane_get_nbeads()
+    nchains = mdl.alkane_get_nchains()
+
+    f = h5py.File(filename,"r")
+    for iwalker in range(1,nwalkers):
+        groupname = f"walker_{iwalker:04d}"
+        cell = f[groupname]["unitcell"][:]
+        mdl.box_set_cell(iwalker,cell)
+        new_coords = f[groupname]["coordinates"][:]
+        for ichain in range(nchains):
+            coords = mdl.alkane_get_chain(j+1,i)
+            for ibead in range(nbeads):
+                coords[ibead] = new_coords[ibead]
+
+    f.close()
