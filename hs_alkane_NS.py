@@ -8,7 +8,7 @@ from NS_hsa import *
 #parsing inputs
 
 #parent_dir = os.getcwd()
-parent_dir = "." #temporary until I rebuild hs_alkane to take longer filenames
+parent_dir = "." #temporary until hs_alkane can take longer filenames
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--iterations", default = 2e5, type=float, help = "Number of iterations to run \n")
@@ -48,7 +48,6 @@ if not from_restart:
     
     pwd  = f"{dir_prefix}.{i_n}/"    
     os.mkdir(f"{pwd}")
-    os.mkdir(f"{pwd}restarts/")
 
 
 if from_restart:
@@ -58,6 +57,7 @@ if from_restart:
     pwd = f"{parent_dir}/{restart_folder}"
     print(pwd)
     with open(f'{pwd}energies.txt') as f:
+        next(f)
         dataline = f.readline().rstrip().split()
         if len(dataline) != 4:
             raise ValueError("Wrong number of inputs in restart file")
@@ -68,12 +68,9 @@ if from_restart:
 
 
 
-ns_run = ns_info(nwalkers,nchains,nbeads,walk_length)
+ns_run = ns_info(nwalkers,nchains,nbeads,walk_length, time)
 
-
-energies_filename = f"{pwd}energies.txt"
-traj_filename = f"{pwd}traj.extxyz"
-
+ns_run.set_directory(pwd)
 
 
 ###################################################################
@@ -139,27 +136,29 @@ else:
     
 # main driver code
 
-mc_adjust_interval = ns_run.nwalkers//2 #for adjusting step sizes
-low_acc_rate = 0.2
-high_acc_rate = 0.5 
-
-snapshots = 1000
-vis_interval = ns_iterations//snapshots
+# mc_adjust_interval = ns_run.nwalkers//2 #for adjusting step sizes
 
 
+# snapshots = 1000
+# vis_interval = ns_iterations//snapshots
 
-energies_file = open(energies_filename, "a+")
+# restart_interval = int(5e3)
+# print_interval = int(1e2)
+
+ns_run.set_intervals()
+
+
+#energies_file = open(ns_run.energies_filename, "a+")
 
 if not from_restart:
-    energies_file.write(f"{walk_length} {nbeads} {nchains} {nwalkers} \n")
-    energies_file.write(f"{nwalkers} {1} {5*nchains} {False} {nchains} \n")
+
+    ns_run.energies_file.write(f"{ns_run.nwalkers} {1} {5*ns_run.nchains} {False} {ns_run.nchains} \n")
+    ns_run.energies_file.write(f"{ns_run.sweeps_per_walk} {ns_run.nbeads} {ns_run.nchains} {ns_run.nwalkers} \n")
     prev_lines = 0
 else:
-    prev_lines = sum(1 for line in open(energies_filename)) - 2
+    prev_lines = sum(1 for line in open(ns_run.energies_filename)) - 2
 
     
-    
-restart_interval = int(5e3)
 
 #traj = ase.io.write("nestedsampling.extxyz", mode="a", fmt="extxyz")
 
@@ -169,50 +168,48 @@ restart_interval = int(5e3)
 
 
 
-for i in range(ns_iterations):
-    index_max = max(ns_run.volumes, key=ns_run.volumes.get)
-    volume_limit = ns_run.volumes[index_max]
-    clone = np.random.randint(1,nwalkers+1)
-    
-    if i%vis_interval == 0:
-        largest_config = mk_ase_config(index_max,ns_run.nbeads,ns_run.nchains)
-        largest_config.wrap()
-        asewrite(traj_filename,largest_config, append = True)
-#         traj.write(largest_config)
+for i in range(prev_lines, ns_iterations+prev_lines):
+    perform_ns_iter(ns_run, i, move_ratio)
 
+# for i in range(ns_iterations):
+#     index_max = ns_run.max_vol_index()
+#     volume_limit = ns_run.volumes[index_max]
+#     clone = np.random.randint(1,nwalkers+1)
+    
+#     if i%vis_interval == 0:
+#         ns_run.write_to_traj()
+# #         traj.write(largest_config)
+    
+#     if i%mc_adjust_interval == 0:
+#         adjust_mc_steps(ns_run, clone, active_box, volume_limit)
 
     
-    if i%mc_adjust_interval == 0:
-        adjust_mc_steps(ns_run, clone, active_box, volume_limit)
-
-    
-    clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
-    
-    
-    new_volume,_ = MC_run(ns_run,walk_length, move_ratio, active_box,volume_limit)
+#     clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
     
     
-    #removed_volumes.append(volumes[index_max])
-    energies_file.write(f"{i+prev_lines} {ns_run.volumes[index_max]} {ns_run.volumes[index_max]} \n")
-    ns_run.volumes[index_max] = new_volume #replacing the highest volume walker
-    clone_walker(active_box, index_max)
-    if i%100 == 0:
-        print(i,volume_limit)
+#     new_volume,_ = MC_run(ns_run,walk_length, move_ratio, active_box,volume_limit)
+    
+    
+#     #removed_volumes.append(volumes[index_max])
+#     ns_run.energies_file.write(f"{i+prev_lines} {ns_run.volumes[index_max]} {ns_run.volumes[index_max]} \n")
+#     ns_run.volumes[index_max] = new_volume #replacing the highest volume walker
+#     clone_walker(active_box, index_max)
+#     if i%print_interval == 0:
+#         print(i,volume_limit)
 
 
+#     if i%restart_interval == 0:
+#         write_configs_to_hdf(ns_run,f"{pwd}restart.hdf5")
+#         t1 = timer()
+#         t_elapsed = t1-t0
+#         if time-t_elapsed < 600:
 
-    if i%restart_interval == 0:
-        write_configs_to_hdf(ns_run,f"{pwd}restart.hdf5")
-        t1 = timer()
-        t_elapsed = t1-t0
-        if time-t_elapsed < 600:
-
-            print("Out of allocated time, writing to file and exiting")
-            sys.exit()
+#             print("Out of allocated time, writing to file and exiting")
+#             sys.exit()
 
 
         
-energies_file.close()
+ns_run.energies_file.close()
 
 write_configs_to_hdf(ns_run,f"{pwd}finalconfigs.hdf5")
 

@@ -4,6 +4,8 @@ import numpy as np
 import sys
 import os
 import copy
+from ase.io import write as ase_write
+from timeit import default_timer as timer
 
 
 #for reading/writing
@@ -31,7 +33,7 @@ stretch_step_max = 0.5
 
 class ns_info:
 
-    def __init__(self,nwalkers,nchains,nbeads,sweeps_per_walk):
+    def __init__(self,nwalkers,nchains,nbeads,sweeps_per_walk,alloted_time, from_restart = False):
         self.nwalkers = nwalkers
         self.nchains = nchains
         self.nbeads = nbeads
@@ -41,11 +43,64 @@ class ns_info:
         self.shear_step_max = 0.5
         self.stretch_step_max = 0.5
 
+        self.low_acc_rate = 0.2
+        self.high_acc_rate = 0.5 
+        
+        self.iter_ = 0
+
+        self.from_restart = from_restart
+
+        self.alloted_time  = alloted_time
+
+        self.start_time = timer()
+
+        self.active_box = nwalkers+1
+
+    
+    def time_elapsed(self):
+        current_time = timer()
+        self.time_elapsed_ = current_time - self.start_time
+        return self.time_elapsed_
+
+    def time_remaining(self):
+        time_remaining_ = self.alloted_time - self.time_elapsed()
+
+        return time_remaining_
+
+    
+
+
+
+
     def set_dshear_max(self,dshear_max):
         self.shear_step_max = dshear_max
 
     def set_dstretch_max(self,dstretch_max):
         self.stretch_step_max = dstretch_max
+
+    def set_acc_rate_range(self,acc_range):
+        if len(acc_range) != 2:
+            raise IndexError("'acc_range' should have two values in it")
+        
+        self.low_acc_rate = acc_range[0]
+        self.high_acc_rate = acc_range[1]
+
+    def set_intervals(self,mc_adjust_interval = None,vis_interval = None, 
+                        restart_interval = int(5e3), print_interval = 100):
+        if mc_adjust_interval is None:
+            mc_adjust_interval = self.nwalkers//2
+
+        self.mc_adjust_interval = mc_adjust_interval
+        
+        if vis_interval is None:
+            vis_interval = mc_adjust_interval
+
+        self.vis_interval = vis_interval
+
+        self.restart_interval = restart_interval
+
+        self.print_interval = print_interval
+        
 
 
 
@@ -73,20 +128,55 @@ class ns_info:
         for ibox in range(1,nwalkers+1):
             self.volumes[ibox], rate = MC_run(self, walk_length, move_ratio, ibox)
 
-
         #overlap check
         self.check_overlaps()
+
+        return self.volumes
+
+
+    def set_directory(self,path="./"):
+
+        self.pwd = path
+
+        self.restart_filename = f"{path}restart.hdf5"
+        self.traj_filename = f"{path}traj.extxyz"
+        self.energies_filename = f"{path}energies.txt"
+
+        self.energies_file = open(self.energies_filename, "a+")
+
+        
 
 
             
 
-        return self.volumes
 
     def load_volumes(self):
         self.volumes = {}
         for ibox in range(1,self.nwalkers+1):
             self.volumes[ibox] = alk.box_compute_volume(ibox)
+
+        #overlap check
+        self.check_overlaps()
+
         return self.volumes
+
+    def write_to_traj(self, ibox=None):
+
+        if ibox is None:
+            ibox = self.max_vol_index()
+
+        
+        max_vol_config = mk_ase_config(ibox,self.nbeads,self.nchains)
+        max_vol_config.wrap()
+
+        ase_write(self.traj_filename, max_vol_config, append = True)
+
+    def max_vol_index(self):
+        """ Returns index of largest simulation box"""
+        self.max_vol_index_ = max(self.volumes, key=self.volumes.get)
+        return self.max_vol_index_
+
+
 
 
 
@@ -612,11 +702,11 @@ def read_configs_from_hdf(filename, nwalkers):
 
     f.close()
 
-def adjust_mc_steps(ns_data, clone, active_box, volume_limit,
-                     low_acc_rate = 0.2, high_acc_rate = 0.5):
+def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
 
         nbeads = ns_data.nbeads
-
+        low_acc_rate = ns_data.low_acc_rate
+        high_acc_rate = ns_data.high_acc_rate
 
         adjust_dv(ns_data,clone,active_box,low_acc_rate,high_acc_rate, volume_limit)
         adjust_dr(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
@@ -627,6 +717,42 @@ def adjust_mc_steps(ns_data, clone, active_box, volume_limit,
         adjust_dshear(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
         adjust_dstretch(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
     
+def perform_ns_iter(ns_data, i, move_ratio = None):
+
+    index_max = ns_data.max_vol_index()
+    volume_limit = ns_data.volumes[index_max]
+    clone = np.random.randint(1,ns_data.nwalkers+1)
+
+    active_box = ns_data.active_box
+    
+    if i%ns_data.vis_interval == 0:
+        ns_data.write_to_traj()
+    
+    if i%ns_data.mc_adjust_interval == 0:
+        adjust_mc_steps(ns_data, clone, active_box, volume_limit)
+
+    
+    clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
+    
+    
+    new_volume,_ = MC_run(ns_data,ns_data.sweeps_per_walk, move_ratio, active_box,volume_limit)
+    
+    
+    #removed_volumes.append(volumes[index_max])
+    ns_data.energies_file.write(f"{i} {ns_data.volumes[index_max]} {ns_data.volumes[index_max]} \n")
+    ns_data.volumes[index_max] = new_volume #replacing the highest volume walker
+    clone_walker(active_box, index_max)
+    if i%ns_data.print_interval == 0:
+        print(i,volume_limit)
+
+
+    if i%ns_data.restart_interval == 0:
+        write_configs_to_hdf(ns_data,ns_data.restart_filename)
+        if ns_data.time_remaining() < 1200:
+
+            print("Out of allocated time, writing to file and exiting")
+            sys.exit()
+
 
 
 
