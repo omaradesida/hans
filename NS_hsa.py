@@ -48,26 +48,6 @@ class ns_info:
         self.stretch_step_max = dstretch_max
 
 
-    
-
-    
-    # def initialise_hsa(self):
-    #     print("set boxes")
-    #     alk.box_set_num_boxes(self.nwalkers+1)
-    #     print("set pbc")
-    #     alk.box_set_pbc(1)
-    #     print("set nchains")
-    #     alk.alkane_set_nchains(self.nchains) 
-    #     print("set nbeads")
-    #     alk.alkane_set_nbeads(self.nbeads)   
-    #     print("alk.initialise") 
-    #     alk.alkane_initialise()
-    #     print("isotropic")           
-    #     alk.box_set_isotropic(1)
-        
-    #     alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
-    #     alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
-    #     print("done initialise")
 
     def check_overlaps(self):
         overlap_check = np.zeros(self.nwalkers)
@@ -75,10 +55,39 @@ class ns_info:
             overlap_check[alk.alkane_check_chain_overlap(ibox)]
         if np.any(overlap_check):
             print("Overlaps Detected")
+            sys.exit()
             return 1
         else:
             print("No Overlaps Present")
             return 0
+
+    def perturb_initial_configs(self, move_ratio, walk_length = 20):
+    
+        """ Runs a number of Monte Carlo steps on every simulation box, using the move_ratio assigned to it,
+        Checks for overlaps, and returns a dictionary which uses the number for each simulation box as the key for its volume"""
+
+        nwalkers = self.nwalkers
+
+        self.volumes = {}
+        start_volumes = []
+        for ibox in range(1,nwalkers+1):
+            self.volumes[ibox], rate = MC_run(self, walk_length, move_ratio, ibox)
+
+
+        #overlap check
+        self.check_overlaps()
+
+
+            
+
+        return self.volumes
+
+    def load_volumes(self):
+        self.volumes = {}
+        for ibox in range(1,self.nwalkers+1):
+            self.volumes[ibox] = alk.box_compute_volume(ibox)
+        return self.volumes
+
 
 
 
@@ -512,7 +521,7 @@ def populate_boxes(nwalkers,nchains):
                 if ifail != 0:
                     rb_factor = 0
 
-def shake_initial_configs(ns_data, move_ratio, walk_length = 20):
+def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
     
     """ Runs a number of Monte Carlo steps on every simulation box, using the move_ratio assigned to it,
     Checks for overlaps, and returns a dictionary which uses the number for each simulation box as the key for its volume"""
@@ -602,6 +611,22 @@ def read_configs_from_hdf(filename, nwalkers):
                 coords[ibead] = new_coords[ibead]
 
     f.close()
+
+def adjust_mc_steps(ns_data, clone, active_box, volume_limit,
+                     low_acc_rate = 0.2, high_acc_rate = 0.5):
+
+        nbeads = ns_data.nbeads
+
+
+        adjust_dv(ns_data,clone,active_box,low_acc_rate,high_acc_rate, volume_limit)
+        adjust_dr(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+        if ns_data.nbeads >= 2:
+            adjust_dt(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+        if ns_data.nbeads >= 4:
+            adjust_dh(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+        adjust_dshear(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+        adjust_dstretch(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+    
 
 
 

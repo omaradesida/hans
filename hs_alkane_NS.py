@@ -100,12 +100,6 @@ alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC move
 #creating initial boxes/loading boxes from restart folder
 
 if not from_restart:
-    # max_vol_per_atom = 15
-    # #set cell size
-    # cell_matrix = 0.999*np.eye(3)*np.cbrt(ns_run.nbeads*ns_run.nchains*max_vol_per_atom)#*np.random.uniform(0,1)
-    # for ibox in range(1,ns_run.nwalkers+1):
-    #     alk.box_set_cell(ibox,cell_matrix)
-    # populate_boxes(ns_run.nwalkers, ns_run.nchains)
 
     create_initial_configs(ns_run)
     
@@ -139,11 +133,9 @@ move_ratio[istr] = 3
 #constructing dictionaries which contain initial volumes
 
 if not from_restart:
-    volumes = shake_initial_configs(ns_run, move_ratio)
+    ns_run.perturb_initial_configs(move_ratio)
 else:
-    volumes = {}
-    for ibox in range(1,ns_run.nwalkers+1):
-        volumes[ibox] = alk.box_compute_volume(ibox)
+    ns_run.load_volumes()
     
 # main driver code
 
@@ -178,8 +170,8 @@ restart_interval = int(5e3)
 
 
 for i in range(ns_iterations):
-    index_max = max(volumes, key=volumes.get)
-    volume_limit = volumes[index_max]
+    index_max = max(ns_run.volumes, key=ns_run.volumes.get)
+    volume_limit = ns_run.volumes[index_max]
     clone = np.random.randint(1,nwalkers+1)
     
     if i%vis_interval == 0:
@@ -191,14 +183,7 @@ for i in range(ns_iterations):
 
     
     if i%mc_adjust_interval == 0:
-        adjust_dv(ns_run,clone,active_box,low_acc_rate,high_acc_rate, volume_limit)
-        adjust_dr(ns_run,clone,active_box,low_acc_rate,high_acc_rate)
-        if ns_run.nbeads >= 2:
-            adjust_dt(ns_run,clone,active_box,low_acc_rate,high_acc_rate)
-        if ns_run.nbeads >= 4:
-            adjust_dh(ns_run,clone,active_box,low_acc_rate,high_acc_rate)
-        adjust_dshear(ns_run,clone,active_box,low_acc_rate,high_acc_rate)
-        adjust_dstretch(ns_run,clone,active_box,low_acc_rate,high_acc_rate)
+        adjust_mc_steps(ns_run, clone, active_box, volume_limit)
 
     
     clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
@@ -208,8 +193,8 @@ for i in range(ns_iterations):
     
     
     #removed_volumes.append(volumes[index_max])
-    energies_file.write(f"{i+prev_lines} {volumes[index_max]} {volumes[index_max]} \n")
-    volumes[index_max] = new_volume #replacing the highest volume walker
+    energies_file.write(f"{i+prev_lines} {ns_run.volumes[index_max]} {ns_run.volumes[index_max]} \n")
+    ns_run.volumes[index_max] = new_volume #replacing the highest volume walker
     clone_walker(active_box, index_max)
     if i%100 == 0:
         print(i,volume_limit)
@@ -217,7 +202,7 @@ for i in range(ns_iterations):
 
 
     if i%restart_interval == 0:
-        write_configs_to_hdf(ns_run,f"{pwd}configs.hdf5")
+        write_configs_to_hdf(ns_run,f"{pwd}restart.hdf5")
         t1 = timer()
         t_elapsed = t1-t0
         if time-t_elapsed < 600:
@@ -229,7 +214,7 @@ for i in range(ns_iterations):
         
 energies_file.close()
 
-write_configs_to_hdf(ns_run,f"{pwd}configs.hdf5")
+write_configs_to_hdf(ns_run,f"{pwd}finalconfigs.hdf5")
 
 #overlap check
 ns_run.check_overlaps()
