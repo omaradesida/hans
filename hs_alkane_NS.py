@@ -56,15 +56,17 @@ if from_restart:
     
     pwd = f"{parent_dir}/{restart_folder}"
     print(pwd)
-    with open(f'{pwd}energies.txt') as f:
-        next(f)
-        dataline = f.readline().rstrip().split()
-        if len(dataline) != 4:
-            raise ValueError("Wrong number of inputs in restart file")
-        walk_length = int(dataline[0])
-        nbeads = int(dataline[1])
-        nchains = int(dataline[2])
-        nwalkers = int(dataline[3])
+
+    data = read_data_from_hdf(f"{pwd}restart.hdf5")
+
+    nbeads = int(data["nbeads"])
+    nchains = int(data["nchains"])
+    nwalkers = int(data["nwalkers"])
+    prev_lines = int(data["prev_iters"])
+    walk_length = int(data["sweeps_per_walk"])
+
+
+
 
 
 
@@ -101,7 +103,7 @@ if not from_restart:
     create_initial_configs(ns_run)
     
 else:
-    alk.io_read_xmol(f"{pwd}restarts/chain.xmol")
+    set_configs_from_hdf(f"{pwd}restart.hdf5")
     
     
 #setting step sizes
@@ -121,7 +123,7 @@ move_ratio = np.zeros(6)
 move_ratio[ivol] = 1
 move_ratio[itrans] = 3.0*ns_run.nchains
 move_ratio[irot] = (2.0*ns_run.nchains) if ns_run.nbeads >= 2 else 0
-move_ratio[idih] = max(((ns_run.nbeads-3.0)*(ns_run.nchains),0))
+move_ratio[idih] = 1.0*max(((ns_run.nbeads-3.0)*(ns_run.nchains),0))
 move_ratio[ishear] = 3
 move_ratio[istr] = 3
 #moves_prob = np.cumsum(moves_ratio)/np.sum(moves_ratio)
@@ -139,13 +141,13 @@ else:
 # mc_adjust_interval = ns_run.nwalkers//2 #for adjusting step sizes
 
 
-# snapshots = 1000
-# vis_interval = ns_iterations//snapshots
+snapshots = 100
+vis_interval = ns_iterations//snapshots
 
 # restart_interval = int(5e3)
 # print_interval = int(1e2)
 
-ns_run.set_intervals()
+ns_run.set_intervals(vis_interval = vis_interval)
 
 
 #energies_file = open(ns_run.energies_filename, "a+")
@@ -166,6 +168,7 @@ else:
 # f = IntProgress(min=0, max=ns_iterations) 
 # display(f) # display the bar
 
+ns_run.write_all_to_extxyz()
 
 
 for i in range(prev_lines, ns_iterations+prev_lines):
@@ -211,7 +214,7 @@ for i in range(prev_lines, ns_iterations+prev_lines):
         
 ns_run.energies_file.close()
 
-write_configs_to_hdf(ns_run,f"{pwd}finalconfigs.hdf5")
+write_configs_to_hdf(ns_run,i)
 
 #overlap check
 ns_run.check_overlaps()

@@ -4,7 +4,7 @@ import numpy as np
 import sys
 import os
 import copy
-from ase.io import write as ase_write
+from ase import io
 from timeit import default_timer as timer
 
 
@@ -34,19 +34,19 @@ stretch_step_max = 0.5
 class ns_info:
 
     def __init__(self,nwalkers,nchains,nbeads,sweeps_per_walk,alloted_time, from_restart = False):
-        self.nwalkers = nwalkers
-        self.nchains = nchains
-        self.nbeads = nbeads
-        self.sweeps_per_walk = sweeps_per_walk
+        self.nwalkers = int(nwalkers)
+        self.nchains = int(nchains)
+        self.nbeads = int(nbeads)
+        self.sweeps_per_walk = int(sweeps_per_walk)
 
 
-        self.shear_step_max = 0.5
-        self.stretch_step_max = 0.5
+        self.shear_step_max = float(0.5)
+        self.stretch_step_max = float(0.5)
 
-        self.low_acc_rate = 0.2
-        self.high_acc_rate = 0.5 
+        self.low_acc_rate = float(0.2)
+        self.high_acc_rate = float(0.5)
         
-        self.iter_ = 0
+        self.iter_ = int(0)
 
         self.from_restart = from_restart
 
@@ -110,7 +110,6 @@ class ns_info:
             overlap_check[alk.alkane_check_chain_overlap(ibox)]
         if np.any(overlap_check):
             print("Overlaps Detected")
-            sys.exit()
             return 1
         else:
             print("No Overlaps Present")
@@ -160,7 +159,7 @@ class ns_info:
 
         return self.volumes
 
-    def write_to_traj(self, ibox=None):
+    def write_to_extxyz(self, ibox=None):
 
         if ibox is None:
             ibox = self.max_vol_index()
@@ -169,12 +168,19 @@ class ns_info:
         max_vol_config = mk_ase_config(ibox,self.nbeads,self.nchains)
         max_vol_config.wrap()
 
-        ase_write(self.traj_filename, max_vol_config, append = True)
+        io.write(self.traj_filename, max_vol_config, append = True)
 
     def max_vol_index(self):
         """ Returns index of largest simulation box"""
         self.max_vol_index_ = max(self.volumes, key=self.volumes.get)
         return self.max_vol_index_
+
+    def write_all_to_extxyz(self, filename = "dump.extxyz"):
+        for i in range(1,self.nwalkers+1):
+            atoms = mk_ase_config(i,self.nbeads,self.nchains)
+            atoms.wrap()
+            io.write(filename, atoms, append = True)
+
 
 
 
@@ -291,11 +297,20 @@ def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 55):
 
     
     v1 = orig_cell_copy[other_vec_ind[0],:]
-    v2 = orig_cell_copy[other_vec_ind[1],:]
+    v2 = orig_cell_copy[other_vec_ind[1],:]  
+
     
     v1 /= np.sqrt(np.dot(v1,v1))
     v2 -= v1*np.dot(v1,v2) 
     v2 /= np.sqrt(np.dot(v2,v2))
+
+    if np.isnan(np.sum(v1)) or np.isnan(np.sum(v2)):
+        print(v1_, v2_)
+        print(v1,v2)
+        print(orig_cell)
+        sys.exit()
+
+
 
     
     # pick random magnitudes
@@ -492,7 +507,11 @@ def clone_walker(ibox_original,ibox_clone):
     nbeads  = alk.alkane_get_nbeads()
     nchains = alk.alkane_get_nchains()
     
+
+
+
     cell = alk.box_get_cell(ibox_original)
+
     
     alk.box_set_cell(ibox_clone,cell)
     for ichain in range(1,nchains+1):
@@ -654,22 +673,30 @@ def celltoxmolstring(atoms):
     
     return cellstring
 
-def write_configs_to_hdf(ns_data, filename = "configs.hdf5"):
+def write_configs_to_hdf(ns_data, current_iter, filename = None):
     """Write the coordinates of all hs_alkane boxes to a file. Default behavior is to overwrite previous data, 
 
     Arguments:
         filename (default = "configs.mol"): File to write atoms objects to.
 
     """
+    if filename is None:
+        filename = ns_data.restart_filename
 
 
-    f = h5py.File(filename, "w")
-
-    
 
     nwalkers = ns_data.nwalkers
     nbeads = ns_data.nbeads
     nchains = ns_data.nchains
+
+    f = h5py.File(filename, "w")
+
+    f.attrs.create("nbeads", nbeads)
+    f.attrs.create("nchains", nchains)
+    f.attrs.create("nwalkers", nwalkers)
+    f.attrs.create("prev_iters", current_iter)
+    f.attrs.create("sweeps", ns_data.sweeps_per_walk)
+    
 
     for iwalker in range(1,nwalkers+1):
         groupname = f"walker_{iwalker:04d}"
@@ -684,21 +711,46 @@ def write_configs_to_hdf(ns_data, filename = "configs.hdf5"):
 
     f.close()
 
-def read_configs_from_hdf(filename, nwalkers):
-
-    nbeads = alk.alkane_get_nbeads()
-    nchains = alk.alkane_get_nchains()
+def read_data_from_hdf(filename):
 
     f = h5py.File(filename,"r")
-    for iwalker in range(1,nwalkers):
+
+    data = {}
+
+
+    data["nbeads"] = f.attrs["nbeads"]
+    data["nchains"] = f.attrs["nchains"]
+    data["nwalkers"] = f.attrs["nwalkers"]
+    data["prev_iters"] = f.attrs["prev_iters"]
+    data["sweeps_per_walk"] = f.attrs["sweeps"]
+
+    return data
+
+    f.close()
+
+
+def set_configs_from_hdf(filename):
+
+    f = h5py.File(filename,"r")
+
+
+    nbeads = int(f.attrs["nbeads"])
+    nchains = int(f.attrs["nchains"])
+    nwalkers = int(f.attrs["nwalkers"])
+
+    prev_iters = int(f.attrs["prev_iters"])
+    sweeps_per_walk = int(f.attrs["sweeps"])
+
+
+    for iwalker in range(1,nwalkers+1):
         groupname = f"walker_{iwalker:04d}"
         cell = f[groupname]["unitcell"][:]
         alk.box_set_cell(iwalker,cell)
         new_coords = f[groupname]["coordinates"][:]
         for ichain in range(nchains):
-            coords = alk.alkane_get_chain(j+1,i)
+            coords = alk.alkane_get_chain(ichain+1,iwalker)
             for ibead in range(nbeads):
-                coords[ibead] = new_coords[ibead]
+                coords[ibead] = new_coords[ichain*nbeads+ibead]
 
     f.close()
 
@@ -708,14 +760,19 @@ def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
         low_acc_rate = ns_data.low_acc_rate
         high_acc_rate = ns_data.high_acc_rate
 
-        adjust_dv(ns_data,clone,active_box,low_acc_rate,high_acc_rate, volume_limit)
-        adjust_dr(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+        rates=[0,0,0,0,0,0]
+
+        rates[0] = adjust_dv(ns_data,clone,active_box,low_acc_rate,high_acc_rate, volume_limit)
+        rates[1] = adjust_dr(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
         if ns_data.nbeads >= 2:
-            adjust_dt(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+            rates[2] = adjust_dt(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
         if ns_data.nbeads >= 4:
-            adjust_dh(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
-        adjust_dshear(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
-        adjust_dstretch(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+            rates[3] = adjust_dh(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+        rates[4] = adjust_dshear(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+        rates[5] = adjust_dstretch(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
+
+
+        return rates
     
 def perform_ns_iter(ns_data, i, move_ratio = None):
 
@@ -726,10 +783,10 @@ def perform_ns_iter(ns_data, i, move_ratio = None):
     active_box = ns_data.active_box
     
     if i%ns_data.vis_interval == 0:
-        ns_data.write_to_traj()
+        ns_data.write_to_extxyz()
     
     if i%ns_data.mc_adjust_interval == 0:
-        adjust_mc_steps(ns_data, clone, active_box, volume_limit)
+        rates = adjust_mc_steps(ns_data, clone, active_box, volume_limit)
 
     
     clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
@@ -743,6 +800,7 @@ def perform_ns_iter(ns_data, i, move_ratio = None):
     ns_data.volumes[index_max] = new_volume #replacing the highest volume walker
     clone_walker(active_box, index_max)
     if i%ns_data.print_interval == 0:
+        print(rates)
         print(i,volume_limit)
 
 
@@ -752,6 +810,7 @@ def perform_ns_iter(ns_data, i, move_ratio = None):
 
             print("Out of allocated time, writing to file and exiting")
             sys.exit()
+
 
 
 
