@@ -774,7 +774,7 @@ def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
 
         return rates
     
-def perform_ns_iter(ns_data, i, move_ratio = None):
+def perform_ns_iter(ns_data, step, move_ratio = None):
 
     index_max = ns_data.max_vol_index()
     volume_limit = ns_data.volumes[index_max]
@@ -782,10 +782,10 @@ def perform_ns_iter(ns_data, i, move_ratio = None):
 
     active_box = ns_data.active_box
     
-    if i%ns_data.vis_interval == 0:
+    if step%ns_data.vis_interval == 0:
         ns_data.write_to_extxyz()
     
-    if i%ns_data.mc_adjust_interval == 0:
+    if step%ns_data.mc_adjust_interval == 0:
         rates = adjust_mc_steps(ns_data, clone, active_box, volume_limit)
 
     
@@ -796,15 +796,15 @@ def perform_ns_iter(ns_data, i, move_ratio = None):
     
     
     #removed_volumes.append(volumes[index_max])
-    ns_data.energies_file.write(f"{i} {ns_data.volumes[index_max]} {ns_data.volumes[index_max]} \n")
+    ns_data.energies_file.write(f"{step} {ns_data.volumes[index_max]} {ns_data.volumes[index_max]} \n")
     ns_data.volumes[index_max] = new_volume #replacing the highest volume walker
     clone_walker(active_box, index_max)
-    if i%ns_data.print_interval == 0:
+    if step%ns_data.print_interval == 0:
         print(rates)
-        print(i,volume_limit)
+        print(step,volume_limit)
 
 
-    if i%ns_data.restart_interval == 0:
+    if step%ns_data.restart_interval == 0:
         write_configs_to_hdf(ns_data,ns_data.restart_filename)
         if ns_data.time_remaining() < 1200:
 

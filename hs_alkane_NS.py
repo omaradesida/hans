@@ -1,5 +1,8 @@
 
 from timeit import default_timer as timer
+from joblib import Parallel, delayed
+import joblib
+
 
 t0 = timer()
 
@@ -137,9 +140,9 @@ else:
     ns_run.load_volumes()
     
 # main driver code
+##############################################################
 
 # mc_adjust_interval = ns_run.nwalkers//2 #for adjusting step sizes
-
 
 snapshots = 100
 vis_interval = ns_iterations//snapshots
@@ -150,7 +153,6 @@ vis_interval = ns_iterations//snapshots
 ns_run.set_intervals(vis_interval = vis_interval)
 
 
-#energies_file = open(ns_run.energies_filename, "a+")
 
 if not from_restart:
 
@@ -161,54 +163,13 @@ else:
     prev_lines = sum(1 for line in open(ns_run.energies_filename)) - 2
 
     
+with joblib.parallel_backend("multiprocessing"):
+    Parallel(n_jobs=10)(delayed(perform_ns_iter(ns_run, i, move_ratio))(ns_data = ns_run,
+         step=i, move_ratio = move_ratio) for i in range(prev_lines, ns_iterations+prev_lines))
 
-#traj = ase.io.write("nestedsampling.extxyz", mode="a", fmt="extxyz")
+# for i in range(prev_lines, ns_iterations+prev_lines):
+#     perform_ns_iter(ns_run, i, move_ratio)
 
-
-# f = IntProgress(min=0, max=ns_iterations) 
-# display(f) # display the bar
-
-ns_run.write_all_to_extxyz()
-
-
-for i in range(prev_lines, ns_iterations+prev_lines):
-    perform_ns_iter(ns_run, i, move_ratio)
-
-# for i in range(ns_iterations):
-#     index_max = ns_run.max_vol_index()
-#     volume_limit = ns_run.volumes[index_max]
-#     clone = np.random.randint(1,nwalkers+1)
-    
-#     if i%vis_interval == 0:
-#         ns_run.write_to_traj()
-# #         traj.write(largest_config)
-    
-#     if i%mc_adjust_interval == 0:
-#         adjust_mc_steps(ns_run, clone, active_box, volume_limit)
-
-    
-#     clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
-    
-    
-#     new_volume,_ = MC_run(ns_run,walk_length, move_ratio, active_box,volume_limit)
-    
-    
-#     #removed_volumes.append(volumes[index_max])
-#     ns_run.energies_file.write(f"{i+prev_lines} {ns_run.volumes[index_max]} {ns_run.volumes[index_max]} \n")
-#     ns_run.volumes[index_max] = new_volume #replacing the highest volume walker
-#     clone_walker(active_box, index_max)
-#     if i%print_interval == 0:
-#         print(i,volume_limit)
-
-
-#     if i%restart_interval == 0:
-#         write_configs_to_hdf(ns_run,f"{pwd}restart.hdf5")
-#         t1 = timer()
-#         t_elapsed = t1-t0
-#         if time-t_elapsed < 600:
-
-#             print("Out of allocated time, writing to file and exiting")
-#             sys.exit()
 
 
         
