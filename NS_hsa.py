@@ -6,18 +6,19 @@ import os
 import copy
 from ase import io
 from timeit import default_timer as timer
+import multiprocessing as mp
+from functools import partial
 
 
 #for reading/writing
 import h5py
 
-import argparse #parse arguments
 
 
 #for converting hs_alkane boxes to ASE atoms objects
 from ase import Atoms
 #from ase.visualize import view
-from ase.io import write as asewrite
+# from ase.io import write as asewrite
 
 
 
@@ -774,42 +775,77 @@ def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
 
         return rates
     
-def perform_ns_iter(ns_data, step, move_ratio = None):
-
-    index_max = ns_data.max_vol_index()
-    volume_limit = ns_data.volumes[index_max]
-    clone = np.random.randint(1,ns_data.nwalkers+1)
-
+def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, processes = 1):
+            
+            
     active_box = ns_data.active_box
-    
-    if step%ns_data.vis_interval == 0:
-        ns_data.write_to_extxyz()
-    
-    if step%ns_data.mc_adjust_interval == 0:
-        rates = adjust_mc_steps(ns_data, clone, active_box, volume_limit)
+    pool = mp.pool(processes = processes)
 
-    
-    clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
-    
-    
-    new_volume,_ = MC_run(ns_data,ns_data.sweeps_per_walk, move_ratio, active_box,volume_limit)
-    
-    
-    #removed_volumes.append(volumes[index_max])
-    ns_data.energies_file.write(f"{step} {ns_data.volumes[index_max]} {ns_data.volumes[index_max]} \n")
-    ns_data.volumes[index_max] = new_volume #replacing the highest volume walker
-    clone_walker(active_box, index_max)
-    if step%ns_data.print_interval == 0:
-        print(rates)
-        print(step,volume_limit)
+    for i in range(prev_iters, prev_iters+iterations):
 
 
-    if step%ns_data.restart_interval == 0:
-        write_configs_to_hdf(ns_data,ns_data.restart_filename)
-        if ns_data.time_remaining() < 1200:
+        index_max = ns_data.max_vol_index() #selecting the walker with highest volume
+        volume_limit = ns_data.volumes[index_max] #setting volume limit
 
-            print("Out of allocated time, writing to file and exiting")
-            sys.exit()
+
+        ns_data.energies_file.write(f"{i} {ns_data.volumes[index_max]} {ns_data.volumes[index_max]} \n") #writing this volume to output
+
+
+
+        clone = np.random.randint(1,ns_data.nwalkers+1) #selecting which walker to clone
+
+        clone_walker(clone, index_max)
+
+        active_walkers = np.random.choice(np.setdiff1d(np.arange(1,ns_data.nwalkers+1),index_max,True), processes-1, False)
+        active_walkers = np.append(clone, active_walkers)
+
+        multiwalk = partial(MC_run, ns_data = ns_data, sweeps = ns_data.sweeps_per_walk, move_ratio = move_ratio, volume_limit = volume_limit)
+
+        walk_output = pool.map(multiwalk,active_walkers)
+
+        new_volumes = [i[0] for i in walk_output]
+
+        ns_data.volumes[active_walkers] = new_volumes
+
+
+
+
+
+
+
+
+
+        
+        
+        if i%ns_data.vis_interval == 0:
+            ns_data.write_to_extxyz()
+        
+        if i%ns_data.mc_adjust_interval == 0:
+            rates = adjust_mc_steps(ns_data, clone, active_box, volume_limit)
+
+        
+        # clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
+        
+        
+        # new_volume,_ = MC_run(ns_data,ns_data.sweeps_per_walk, move_ratio, active_box,volume_limit)
+        
+        
+        #removed_volumes.append(volumes[index_max])
+        ns_data.volumes[index_max] = new_volume #replacing the highest volume walker
+        clone_walker(active_box, index_max)
+        if i%ns_data.print_interval == 0:
+            print(rates)
+            print(i,volume_limit)
+
+
+        if i%ns_data.restart_interval == 0:
+            write_configs_to_hdf(ns_data,ns_data.restart_filename)
+            if ns_data.time_remaining() < 1200:
+
+                print("Out of allocated time, writing to file and exiting")
+                pool.close()
+                sys.exit()
+    pool.close()
 
 
 
