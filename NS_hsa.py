@@ -36,12 +36,8 @@ stretch_step_max = 0.5
 
 class ns_info:
 
-    def __init__(self,nwalkers,nchains,nbeads,sweeps_per_walk,alloted_time, from_restart = False):
-        self.nwalkers = int(nwalkers)
-        self.nchains = int(nchains)
-        self.nbeads = int(nbeads)
-        self.sweeps_per_walk = int(sweeps_per_walk)
-
+    def __init__(self, parameters, from_restart = False):
+        self.parameters = parameters
 
         self.shear_step_max = float(0.5)
         self.stretch_step_max = float(0.5)
@@ -53,12 +49,12 @@ class ns_info:
 
         self.from_restart = from_restart
 
-        self.alloted_time  = alloted_time
-
         self.start_time = timer()
 
-        self.active_box = nwalkers+1
+        self.active_box = parameters.nwalkers+1
 
+    def __getattr__(self, item):
+        return getattr(self.parameters, item)
     
     def time_elapsed(self):
         current_time = timer()
@@ -66,7 +62,7 @@ class ns_info:
         return self.time_elapsed_
 
     def time_remaining(self):
-        time_remaining_ = self.alloted_time - self.time_elapsed()
+        time_remaining_ = self.allotted_time - self.time_elapsed()
 
         return time_remaining_
 
@@ -183,15 +179,6 @@ class ns_info:
             atoms = mk_ase_config(i,self.nbeads,self.nchains)
             atoms.wrap()
             io.write(filename, atoms, append = True)
-
-
-
-def create_initial_configs(ns_data, max_vol_per_atom = 15):
-    cell_matrix = 0.999*np.eye(3)*np.cbrt(ns_data.nbeads*ns_data.nchains*max_vol_per_atom)#*np.random.uniform(0,1)
-    for ibox in range(1,ns_data.nwalkers+1):
-        alk.box_set_cell(int(ibox),cell_matrix)
-    populate_boxes(ns_data.nwalkers, ns_data.nchains)
-
 
 
 def mk_ase_config(ibox, Nbeads, Nchains, scaling = 3.75):
@@ -616,18 +603,6 @@ def adjust_dstretch(ns_data, ibox,active_box, lower_bound,upper_bound, min_dstre
         ns_data.stretch_step_max = ns_data.stretch_step_max*equil_factor
     return r
 
-def populate_boxes(nwalkers,nchains):
-    ncopy = nchains
-    for ibox in range(1,nwalkers+1):
-        for ichain in range(1,ncopy+1):
-            rb_factor = 0
-            alk.alkane_set_nchains(ichain)
-            overlap_flag = 1
-            while rb_factor == 0:
-                rb_factor, ifail = alk.alkane_grow_chain(ichain,int(ibox),1)         
-                if ifail != 0:
-                    rb_factor = 0
-
 def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
     
     """ Runs a number of Monte Carlo steps on every simulation box, using the move_ratio assigned to it,
@@ -693,7 +668,7 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
     f.attrs.create("nchains", nchains)
     f.attrs.create("nwalkers", nwalkers)
     f.attrs.create("prev_iters", current_iter)
-    f.attrs.create("sweeps", ns_data.sweeps_per_walk)
+    f.attrs.create("sweeps", ns_data.walklength)
     
 
     for iwalker in range(1,nwalkers+1):
@@ -706,49 +681,6 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
         for ichain in range(nchains):
             chain = alk.alkane_get_chain(ichain+1,iwalker)
             coords[ichain*nbeads:ichain*nbeads+(nbeads), :] = chain
-
-    f.close()
-
-def read_data_from_hdf(filename):
-
-    f = h5py.File(filename,"r")
-
-    data = {}
-
-
-    data["nbeads"] = f.attrs["nbeads"]
-    data["nchains"] = f.attrs["nchains"]
-    data["nwalkers"] = f.attrs["nwalkers"]
-    data["prev_iters"] = f.attrs["prev_iters"]
-    data["sweeps_per_walk"] = f.attrs["sweeps"]
-
-    return data
-
-    f.close()
-
-
-def set_configs_from_hdf(filename):
-
-    f = h5py.File(filename,"r")
-
-
-    nbeads = int(f.attrs["nbeads"])
-    nchains = int(f.attrs["nchains"])
-    nwalkers = int(f.attrs["nwalkers"])
-
-    prev_iters = int(f.attrs["prev_iters"])
-    sweeps_per_walk = int(f.attrs["sweeps"])
-
-
-    for iwalker in range(1,nwalkers+1):
-        groupname = f"walker_{iwalker:04d}"
-        cell = f[groupname]["unitcell"][:]
-        alk.box_set_cell(iwalker,cell)
-        new_coords = f[groupname]["coordinates"][:]
-        for ichain in range(nchains):
-            coords = alk.alkane_get_chain(ichain+1,iwalker)
-            for ibead in range(nbeads):
-                coords[ibead] = new_coords[ichain*nbeads+ibead]
 
     f.close()
 
@@ -823,7 +755,7 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, proce
         if i%ns_data.mc_adjust_interval == 0:
             adjust_mc_steps(ns_data, clone, active_box, volume_limit)
 
-        new_volume,_ = MC_run(ns_data,ns_data.sweeps_per_walk, move_ratio, index_max,volume_limit)
+        new_volume,_ = MC_run(ns_data,ns_data.walklength, move_ratio, index_max,volume_limit)
         
         # clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
         
