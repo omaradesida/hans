@@ -78,6 +78,8 @@ ns_data = ns_info(nwalkers,nchains,nbeads,walk_length, time)
 
 ns_data.set_directory(pwd)
 
+energies_file = open(ns_data.energies_filename, "a+")
+
 #setting params for MC_run
 move_types = ['box','translate', 'rotate', 'dihedral', 'shear', 'stretch']
 ivol = 0; itrans = 1; irot = 2; idih = 3; ishear = 4; istr = 5
@@ -89,112 +91,102 @@ move_ratio[idih] = 1.0*max(((ns_data.nbeads-3.0)*(ns_data.nchains),0))
 move_ratio[ishear] = 3
 move_ratio[istr] = 3
 
+print(move_ratio)
+
 dof_sum = np.sum(move_ratio)
 
 
 if not from_restart:
 
-    ns_data.energies_file.write(f"{ns_data.nwalkers} {1} {5*ns_data.nchains} {False} {ns_data.nchains} \n")
-    ns_data.energies_file.write(f"{ns_data.sweeps_per_walk} {ns_data.nbeads} {ns_data.nchains} {ns_data.nwalkers} \n")
+    energies_file.write(f"{ns_data.nwalkers} {1} {5*ns_data.nchains} {False} {ns_data.nchains} \n")
+    energies_file.write(f"{ns_data.sweeps_per_walk} {ns_data.nbeads} {ns_data.nchains} {ns_data.nwalkers} \n")
     prev_lines = 0
 else:
     prev_lines = sum(1 for line in open(ns_data.energies_filename)) - 2
 
 
-def perform_ns_run(ns_data,thread=0,from_restart = False):
 
 ###################################################################
-    active_box = ns_data.nwalkers+1
+active_box = ns_data.nwalkers+1
 
-    alk.box_set_num_boxes(ns_data.nwalkers+1) #nwalkers+2 if debugging
-    alk.box_initialise()
-    alk.box_set_pbc(1)
-    alk.alkane_set_nchains(ns_data.nchains) 
-    alk.alkane_set_nbeads(ns_data.nbeads)    
-    alk.alkane_initialise()           
-    alk.box_set_isotropic(1)
-    alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
-    alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
+alk.box_set_num_boxes(ns_data.nwalkers+1) #nwalkers+2 if debugging
+alk.box_initialise()
+alk.box_set_pbc(1)
+alk.alkane_set_nchains(ns_data.nchains) 
+alk.alkane_set_nbeads(ns_data.nbeads)    
+alk.alkane_initialise()           
+alk.box_set_isotropic(1)
+alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
+alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
 
-    # ns_data.initialise_hsa()
+# ns_data.initialise_hsa()
 
-    #random seeds
-    #np.random.seed(1)
-    #alk.random_set_random_seed(1)
+#random seeds
+#np.random.seed(1)
+#alk.random_set_random_seed(1)
 
-    ###################################################################
+###################################################################
 
-    #creating initial boxes/loading boxes from restart folder
+#creating initial boxes/loading boxes from restart folder
 
-    if not from_restart:
+if not from_restart:
 
-        create_initial_configs(ns_data)
+    create_initial_configs(ns_data)
+    
+else:
+    set_configs_from_hdf(f"{pwd}restart.hdf5")
+    
+    
+#setting step sizes
+alk.alkane_set_dr_max(0.65)
+alk.alkane_set_dt_max(0.43)
+alk.alkane_set_dh_max(0.4)
+alk.alkane_set_dv_max(0.5)
+
+ns_data.set_dshear_max(0.5)
+ns_data.set_dstretch_max(0.5)
+
+
+
+#moves_prob = np.cumsum(moves_ratio)/np.sum(moves_ratio)
+
+dof_sum = np.sum(move_ratio)-7
+
+
+#constructing dictionaries which contain initial volumes
+
+if not from_restart:
+    ns_data.perturb_initial_configs(move_ratio)
+else:
+    ns_data.load_volumes()
+    
+# main driver code
+##############################################################
+
+# mc_adjust_interval = ns_data.nwalkers//2 #for adjusting step sizes
+
+snapshots = 100
+vis_interval = max(1,ns_iterations//snapshots)
+
+# restart_interval = int(5e3)
+# print_interval = int(1e2)
+
+ns_data.set_intervals(vis_interval = vis_interval)
+
+# for i in range(prev_lines, ns_iterations+prev_lines):
+#     perform_ns_iter(ns_data, i, move_ratio, thread = 0)
+
+perform_ns_run(ns_data,ns_iterations, prev_iters=prev_lines, move_ratio = move_ratio, processes=1, verbose = True)
         
-    else:
-        set_configs_from_hdf(f"{pwd}restart.hdf5")
-        
-        
-    #setting step sizes
-    alk.alkane_set_dr_max(0.65)
-    alk.alkane_set_dt_max(0.43)
-    alk.alkane_set_dh_max(0.4)
-    alk.alkane_set_dv_max(0.5)
+      
 
-    ns_data.set_dshear_max(0.5)
-    ns_data.set_dstretch_max(0.5)
-
-
-
-    #moves_prob = np.cumsum(moves_ratio)/np.sum(moves_ratio)
-
-    dof_sum = np.sum(move_ratio)-7
-
-
-    #constructing dictionaries which contain initial volumes
-
-    if not from_restart:
-        ns_data.perturb_initial_configs(move_ratio)
-    else:
-        ns_data.load_volumes()
-        
-    # main driver code
-    ##############################################################
-
-    # mc_adjust_interval = ns_data.nwalkers//2 #for adjusting step sizes
-
-    snapshots = 100
-    vis_interval = ns_iterations//snapshots
-
-    # restart_interval = int(5e3)
-    # print_interval = int(1e2)
-
-    ns_data.set_intervals(vis_interval = vis_interval)
-
-    # for i in range(prev_lines, ns_iterations+prev_lines):
-    #     perform_ns_iter(ns_data, i, move_ratio, thread = 0)
-
-    perform_ns_run(ns_data,ns_iterations, prev_lines, move_ratio = move_ratio, threads=1)
-        
-        
-
-
-# print(ns_data.energies.shape)
-# print(ns_data.energies)
-
-# print(np.arange(len(ns_data.energies)).shape)
-# print(np.arange(len(ns_data.energies)))
-
-
-
-# np.append(np.arange(len(ns_data.energies)),ns_data.energies,axis=1)
-# np.savetxt(ns_data.energies_filename,ns_data.energies, fmt = ['%d','%f.10','%f.10'],
-#              header = f'''{ns_data.nwalkers} {1} {dof_sum} {False} {ns_data.nchains} \n \
-#              {ns_data.sweeps_per_walk} {ns_data.nbeads} {ns_data.nchains} {ns_data.nwalkers}''',
-#              comments = '')
-
-#ns_data.energies_file.close()
+energies_file.close()
 
 write_configs_to_hdf(ns_data,prev_lines+ns_iterations)
 
 #overlap check
 ns_data.check_overlaps()
+
+time_taken = ns_data.time_elapsed()
+
+print(f"---------Time elapsed is {int(time_taken//60):0>2}:{time_taken%60:0>6.3f}---------")
