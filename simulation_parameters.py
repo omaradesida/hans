@@ -103,9 +103,11 @@ class SimulationParameters:
             cell = f[groupname]["unitcell"][:]
             alk.box_set_cell(iwalker,cell)
             new_coords = f[groupname]["coordinates"][:]
-            for ichain in range(nchains):
-                coords = alk.alkane_get_chain(ichain+1,iwalker)
+            for ichain in range(1,nchains+1):
+                coords = alk.alkane_get_chain(ichain,iwalker)
                 for ibead in range(nbeads):
                     coords[ibead] = new_coords[ichain*nbeads+ibead]
 
         f.close()
+
+

@@ -140,7 +140,7 @@ class ns_info:
         self.traj_filename = f"{path}traj.extxyz"
         self.energies_filename = f"{path}energies.txt"
 
-        self.energies_file = open(self.energies_filename, "a+")
+        # self.energies_file = open(self.energies_filename, "a+")
 
         
 
@@ -592,7 +592,7 @@ def adjust_dstretch(ns_data, ibox,active_box, lower_bound,upper_bound, min_dstre
     sweeps = 20
     move_ratio = [0,0,0,0,0,1]
     clone_walker(ibox,active_box)
-    vol,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
     
     r = acceptance_rate[istr]
     
@@ -706,6 +706,8 @@ def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
     
 def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, processes = 1, verbose = False):
 
+    energies_file = open(ns_data.energies_filename, "a+")
+
 
     if verbose:
         print("Starting Nested Sampling run")
@@ -721,7 +723,7 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, proce
         volume_limit = ns_data.volumes[index_max] #setting volume limit
 
 
-        ns_data.energies_file.write(f"{i} {ns_data.volumes[index_max]} {ns_data.volumes[index_max]} \n") #writing this volume to output
+        energies_file.write(f"{i} {ns_data.volumes[index_max]} {ns_data.volumes[index_max]} \n") #writing this volume to output
 
 
 
@@ -776,13 +778,46 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, proce
 
                 print("Out of allocated time, writing to file and exiting")
 
-                ns_data.energies_file.close()
+                energies_file.close()
                 # pool.close()
                 # pool.join()
                 sys.exit()
-    ns_data.energies_file.close()
+    energies_file.close()
     # pool.close()
     # pool.join()
+
+def import_ase_to_ibox(atoms, ibox, ns_data):
+    """Inputs an ASE atoms object into a simulation cell."""
+
+
+    cell_vectors = atoms.get_cell()
+
+    if cell_vectors.size == 3:
+        cell_vectors *= np.eye(3)
+    alk.box_set_cell(ibox,cell_vectors)
+
+    positions = atoms.get_positions()
+
+    for ichain in range(1,ns_data.nchains+1):
+        chain = alk.alkane_get_chain(ichain,ibox)
+        for ibead in range(ns_data.nbeads):
+            chain[ibead][:] = positions[(ichain-1)*ns_data.nbeads+ibead][:]
+
+
+    return
+
+
+def initialise_sim_cells(ns_data):
+        
+    alk.box_set_num_boxes(ns_data.nwalkers+1) #nwalkers+2 if debugging
+    alk.box_initialise()
+    alk.box_set_pbc(1)
+    alk.alkane_set_nchains(ns_data.nchains) 
+    alk.alkane_set_nbeads(ns_data.nbeads)    
+    alk.alkane_initialise()           
+    alk.box_set_isotropic(1)
+    alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
+    alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate thes
 
 
 

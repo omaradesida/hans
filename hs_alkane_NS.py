@@ -32,32 +32,33 @@ move_ratio[idih] = 1.0*max(((ns_data.nbeads-3.0)*(ns_data.nchains),0))
 move_ratio[ishear] = 3
 move_ratio[istr] = 3
 
-print(move_ratio)
+# print(move_ratio)
 
-dof_sum = np.sum(move_ratio)
+dof = 0
+
+
+if move_ratio[0] != 0:
+    dof+= 3*ns_data.nchains
+if move_ratio[1] != 0:
+    dof+= 2*ns_data.nchains
+
 
 
 if parameters.previous_iterations == 0:
 
-    energies_file.write(f"{ns_data.nwalkers} {1} {5*ns_data.nchains} {False} {ns_data.nchains} \n")
+    print("Creating New Output File")
+
+    energies_file.write(f"{ns_data.nwalkers} {1} {dof} {False} {ns_data.nchains} \n")
     energies_file.write(f"{ns_data.walklength} {ns_data.nbeads} {ns_data.nchains} {ns_data.nwalkers} \n")
 
-
+energies_file.close()
 
 ###################################################################
 active_box = ns_data.nwalkers+1
 
-alk.box_set_num_boxes(ns_data.nwalkers+1) #nwalkers+2 if debugging
-alk.box_initialise()
-alk.box_set_pbc(1)
-alk.alkane_set_nchains(ns_data.nchains) 
-alk.alkane_set_nbeads(ns_data.nbeads)    
-alk.alkane_initialise()           
-alk.box_set_isotropic(1)
-alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
-alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
 
-# ns_data.initialise_hsa()
+initialise_sim_cells(ns_data)
+
 
 #random seeds
 #np.random.seed(1)
@@ -109,7 +110,7 @@ ns_data.set_intervals(vis_interval = vis_interval)
 # for i in range(prev_lines, ns_iterations+prev_lines):
 #     perform_ns_iter(ns_data, i, move_ratio, thread = 0)
 
-print(parameters.total_iterations, parameters.previous_iterations)
+print(parameters.previous_iterations,parameters.total_iterations)
 perform_ns_run(ns_data,parameters.total_iterations, prev_iters=parameters.previous_iterations, move_ratio = move_ratio, processes=1, verbose = True)
         
       
