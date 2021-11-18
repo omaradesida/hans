@@ -1,10 +1,5 @@
-nohup.*
 test.py
-Old_NS_Runs/
-nested_sampling.500.1.energies
 *.traj
-nested_sampling.500.1.extxyz
-slurm-3354297.out
 *.energies
 *.out
 *.extxyz
