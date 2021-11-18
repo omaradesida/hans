@@ -5,3 +5,5 @@ test.py
 *.extxyz
 NS_[0-9]*_.*
 hsa_ns_output.txt
+energies.txt
+*.hdf5

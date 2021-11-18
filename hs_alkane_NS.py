@@ -6,77 +6,18 @@ from timeit import default_timer as timer
 t0 = timer()
 
 from NS_hsa import *
-import argparse
-import os
+from simulation_parameters import SimulationParameters
 
 #parsing inputs
 
 #parent_dir = os.getcwd()
 parent_dir = "." #temporary until hs_alkane can take longer filenames
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-i", "--iterations", default = 2e5, type=float, help = "Number of iterations to run \n")
-parser.add_argument("-t", "--time", type=float, help = "How much time has been allocated for the program to run")
-parser.add_argument("-w", "--nwalkers", default = 10, type=int, help = "Number of walkers to use \n")
-parser.add_argument("-c", "--nchains", default = 32, type=int, help = "Number of chains in the simulation box \n")
-parser.add_argument("-b", "--nbeads", default = 1, type=int, help = "Number of beads in each chain \n")
-parser.add_argument("-l", "--walklength", default = 80, type=int, help = "Number of sweep for each random walk step \n")
-parser.add_argument("-R", "--restart", action = "store_true", help = "Whether or not to restart from a previous attempt\n")
-parser.add_argument("-f","--restart_folder",type=str, help =
-                    "Configurations file to restart from. Energies and Trajectory file should have the same file naming \
-                    convention. \n i.e if restart file is 'foo.restart' energies and trajectory file \
-                    should be foo.energies and foo.extxyz")
+parameters = SimulationParameters.parse_args()
 
-args = parser.parse_args()
-from_restart = args.restart
-ns_iterations = int(args.iterations)
-time = args.time
+ns_data = ns_info(parameters)
 
-
-
-if not from_restart:
-    nwalkers = args.nwalkers
-    nchains = args.nchains
-    nbeads = args.nbeads
-    
-    walk_length = int(args.walklength)
-    
-    dir_prefix = f"{parent_dir}/NS_{nchains}_{nbeads}mer.{nwalkers}.{walk_length}"
-    i_n = 1
-    
-    while os.path.exists(f"{dir_prefix}.{i_n}/"):
-        i_n += 1
-            
-#     traj_filename = f"{dir_prefix}.{i_n}.extxyz"
-#     energies_filename = f"{dir_prefix}.{i_n}.energies"  
-    
-    pwd  = f"{dir_prefix}.{i_n}/"    
-    os.mkdir(f"{pwd}")
-
-
-if from_restart:
-    print("loading settings from prev run")
-    restart_folder = args.restart_folder
-    
-    pwd = f"{parent_dir}/{restart_folder}"
-    print(pwd)
-
-    data = read_data_from_hdf(f"{pwd}restart.hdf5")
-
-    nbeads = int(data["nbeads"])
-    nchains = int(data["nchains"])
-    nwalkers = int(data["nwalkers"])
-    prev_lines = int(data["prev_iters"])
-    walk_length = int(data["sweeps_per_walk"])
-
-
-
-
-
-
-ns_data = ns_info(nwalkers,nchains,nbeads,walk_length, time)
-
-ns_data.set_directory(pwd)
+ns_data.set_directory(parameters.directory)
 
 energies_file = open(ns_data.energies_filename, "a+")
 
@@ -96,13 +37,10 @@ print(move_ratio)
 dof_sum = np.sum(move_ratio)
 
 
-if not from_restart:
+if parameters.previous_iterations == 0:
 
     energies_file.write(f"{ns_data.nwalkers} {1} {5*ns_data.nchains} {False} {ns_data.nchains} \n")
-    energies_file.write(f"{ns_data.sweeps_per_walk} {ns_data.nbeads} {ns_data.nchains} {ns_data.nwalkers} \n")
-    prev_lines = 0
-else:
-    prev_lines = sum(1 for line in open(ns_data.energies_filename)) - 2
+    energies_file.write(f"{ns_data.walklength} {ns_data.nbeads} {ns_data.nchains} {ns_data.nwalkers} \n")
 
 
 
@@ -129,12 +67,7 @@ alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC move
 
 #creating initial boxes/loading boxes from restart folder
 
-if not from_restart:
-
-    create_initial_configs(ns_data)
-    
-else:
-    set_configs_from_hdf(f"{pwd}restart.hdf5")
+parameters.configure_system()
     
     
 #setting step sizes
@@ -155,7 +88,7 @@ dof_sum = np.sum(move_ratio)-7
 
 #constructing dictionaries which contain initial volumes
 
-if not from_restart:
+if parameters.previous_iterations == 0:
     ns_data.perturb_initial_configs(move_ratio)
 else:
     ns_data.load_volumes()
@@ -166,7 +99,7 @@ else:
 # mc_adjust_interval = ns_data.nwalkers//2 #for adjusting step sizes
 
 snapshots = 100
-vis_interval = max(1,ns_iterations//snapshots)
+vis_interval = max(1,parameters.total_iterations//snapshots)
 
 # restart_interval = int(5e3)
 # print_interval = int(1e2)
@@ -176,13 +109,14 @@ ns_data.set_intervals(vis_interval = vis_interval)
 # for i in range(prev_lines, ns_iterations+prev_lines):
 #     perform_ns_iter(ns_data, i, move_ratio, thread = 0)
 
-perform_ns_run(ns_data,ns_iterations, prev_iters=prev_lines, move_ratio = move_ratio, processes=1, verbose = True)
+print(parameters.total_iterations, parameters.previous_iterations)
+perform_ns_run(ns_data,parameters.total_iterations, prev_iters=parameters.previous_iterations, move_ratio = move_ratio, processes=1, verbose = True)
         
       
 
 energies_file.close()
 
-write_configs_to_hdf(ns_data,prev_lines+ns_iterations)
+write_configs_to_hdf(ns_data,parameters.previous_iterations+parameters.total_iterations)
 
 #overlap check
 ns_data.check_overlaps()
