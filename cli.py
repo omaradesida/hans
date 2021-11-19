@@ -15,5 +15,6 @@ def parse_args():
                         "Configurations file to restart from. Energies and Trajectory file should have the same file naming \
                         convention. \n i.e if restart file is 'foo.restart' energies and trajectory file \
                         should be foo.energies and foo.extxyz")
+    parser.add_argument("-p","--processes",default = int,type=int, help = "Number of processes to use in parallel when performing random walks.\n")
 
     return parser.parse_args()

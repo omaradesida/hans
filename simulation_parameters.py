@@ -6,7 +6,7 @@ import cli
 
 class SimulationParameters:
 
-    def __init__(self, nwalkers, nchains, nbeads, walklength, directory, time, previous_iterations, total_iterations):
+    def __init__(self, nwalkers, nchains, nbeads, walklength, directory, time, previous_iterations, total_iterations, processes):
         self.nwalkers = nwalkers
         self.nchains = nchains
         self.nbeads = nbeads
@@ -15,6 +15,7 @@ class SimulationParameters:
         self.allotted_time = time
         self.previous_iterations = previous_iterations
         self.total_iterations = total_iterations
+        self.processes = processes
 
     @classmethod
     def parse_args(cls, parent_dir="."):
@@ -33,6 +34,7 @@ class SimulationParameters:
         nbeads = args.nbeads
         walklength = int(args.walklength)
         total_iterations = int(args.iterations)
+        processes = int(args.processes)
         
         dir_prefix = f"{parent_dir}/NS_{nchains}_{nbeads}mer.{nwalkers}.{walklength}"
         i_n = 1
@@ -43,12 +45,13 @@ class SimulationParameters:
         directory = f"{dir_prefix}.{i_n}/"    
         os.mkdir(f"{directory}")
 
-        return cls(nwalkers, nchains, nbeads, int(walklength), directory, args.time, 0, total_iterations)
+        return cls(nwalkers, nchains, nbeads, int(walklength), directory, args.time, 0, total_iterations, processes)
 
     @classmethod
     def from_restart(cls, args, parent_dir="."):
         print("loading settings from prev run")
         restart_folder = args.restart_folder
+        processes = int(args.processes)
         
         directory = f"{parent_dir}/{restart_folder}"
         print(directory)
@@ -64,7 +67,7 @@ class SimulationParameters:
 
         f.close()
 
-        return cls(nwalkers, nchains, nbeads, walklength, directory, args.time, previous_iterations, total_iterations)
+        return cls(nwalkers, nchains, nbeads, walklength, directory, args.time, previous_iterations, total_iterations, processes)
 
     def configure_system(self, max_vol_per_atom=15):
         if self.previous_iterations == 0:
@@ -103,8 +106,8 @@ class SimulationParameters:
             cell = f[groupname]["unitcell"][:]
             alk.box_set_cell(iwalker,cell)
             new_coords = f[groupname]["coordinates"][:]
-            for ichain in range(1,nchains+1):
-                coords = alk.alkane_get_chain(ichain,iwalker)
+            for ichain in range(0,nchains):
+                coords = alk.alkane_get_chain(ichain+1,iwalker)
                 for ibead in range(nbeads):
                     coords[ibead] = new_coords[ichain*nbeads+ibead]
 

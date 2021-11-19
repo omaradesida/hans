@@ -53,8 +53,8 @@ class ns_info:
 
         self.active_box = parameters.nwalkers+1
 
-    def __getattr__(self, item):
-        return getattr(self.parameters, item)
+    # def __getattr__(self, item):
+    #     return getattr(self.parameters, item)
     
     def time_elapsed(self):
         current_time = timer()
@@ -62,7 +62,7 @@ class ns_info:
         return self.time_elapsed_
 
     def time_remaining(self):
-        time_remaining_ = self.allotted_time - self.time_elapsed()
+        time_remaining_ = self.parameters.allotted_time - self.time_elapsed()
 
         return time_remaining_
 
@@ -87,7 +87,7 @@ class ns_info:
     def set_intervals(self,mc_adjust_interval = None,vis_interval = None, 
                         restart_interval = int(5e3), print_interval = 100):
         if mc_adjust_interval is None:
-            mc_adjust_interval = self.nwalkers//2
+            mc_adjust_interval = max(1,self.parameters.nwalkers//2)
 
         self.mc_adjust_interval = mc_adjust_interval
         
@@ -104,8 +104,8 @@ class ns_info:
 
 
     def check_overlaps(self):
-        overlap_check = np.zeros(self.nwalkers)
-        for ibox in range(1,self.nwalkers+1):
+        overlap_check = np.zeros(self.parameters.nwalkers)
+        for ibox in range(1,self.parameters.nwalkers+1):
             overlap_check[alk.alkane_check_chain_overlap(int(ibox))]
         if np.any(overlap_check):
             print("Overlaps Detected")
@@ -119,7 +119,7 @@ class ns_info:
         """ Runs a number of Monte Carlo steps on every simulation box, using the move_ratio assigned to it,
         Checks for overlaps, and returns a dictionary which uses the number for each simulation box as the key for its volume"""
 
-        nwalkers = self.nwalkers
+        nwalkers = self.parameters.nwalkers
 
         self.volumes = {}
         #start_volumes = []
@@ -150,7 +150,7 @@ class ns_info:
 
     def load_volumes(self):
         self.volumes = {}
-        for ibox in range(1,self.nwalkers+1):
+        for ibox in range(1,self.parameters.nwalkers+1):
             self.volumes[ibox] = alk.box_compute_volume(int(ibox))
 
         #overlap check
@@ -164,7 +164,7 @@ class ns_info:
             ibox = self.max_vol_index()
 
         
-        max_vol_config = mk_ase_config(ibox,self.nbeads,self.nchains)
+        max_vol_config = mk_ase_config(ibox,self.parameters.nbeads,self.parameters.nchains)
         max_vol_config.wrap()
 
         io.write(self.traj_filename, max_vol_config, append = True)
@@ -175,8 +175,8 @@ class ns_info:
         return self.max_vol_index_
 
     def write_all_to_extxyz(self, filename = "dump.extxyz"):
-        for i in range(1,self.nwalkers+1):
-            atoms = mk_ase_config(i,self.nbeads,self.nchains)
+        for i in range(1,self.parameters.nwalkers+1):
+            atoms = mk_ase_config(i,self.parameters.nbeads,self.parameters.nchains)
             atoms.wrap()
             io.write(filename, atoms, append = True)
 
@@ -356,8 +356,8 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 55):
     delta_H = new_cell - cell
     print(delta_H)
     
-
     
+
     alk.alkane_change_box(int(ibox),delta_H, aspect_ratio_limit = 0.8)
     #transform = np.dot(np.linalg.inv(orig_cell), new_cell)
     
@@ -378,7 +378,7 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 55):
 
 
         
-def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max):    
+def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max, return_ase = False):    
     
         
     moves_accepted = np.zeros(6)
@@ -485,7 +485,12 @@ def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max)
     moves_attempted = np.where(moves_attempted == 0, 1, moves_attempted)
     moves_acceptance_rate = moves_accepted/moves_attempted
 
-    return alk.box_compute_volume(int(ibox)), moves_acceptance_rate
+    if return_ase:
+        atoms =  mk_ase_config(ibox, nbeads, nchains, scaling=1)
+
+        return atoms
+    else:
+        return alk.box_compute_volume(int(ibox)), moves_acceptance_rate
 
 def clone_walker(ibox_source,ibox_clone):
     
@@ -608,7 +613,7 @@ def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
     """ Runs a number of Monte Carlo steps on every simulation box, using the move_ratio assigned to it,
     Checks for overlaps, and returns a dictionary which uses the number for each simulation box as the key for its volume"""
 
-    nwalkers = ns_data.nwalkers
+    nwalkers = ns_data.parameters.nwalkers
 
     volumes = {}
     start_volumes = []
@@ -650,7 +655,7 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
     """Write the coordinates of all hs_alkane boxes to a file. Default behavior is to overwrite previous data, 
 
     Arguments:
-        filename (default = "configs.mol"): File to write atoms objects to.
+        filename (default = "Will use the filename provided by ns_data"): File to write atoms objects to.
 
     """
     if filename is None:
@@ -658,9 +663,9 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
 
 
 
-    nwalkers = ns_data.nwalkers
-    nbeads = ns_data.nbeads
-    nchains = ns_data.nchains
+    nwalkers = ns_data.parameters.nwalkers
+    nbeads = ns_data.parameters.nbeads
+    nchains = ns_data.parameters.nchains
 
     f = h5py.File(filename, "w")
 
@@ -668,7 +673,7 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
     f.attrs.create("nchains", nchains)
     f.attrs.create("nwalkers", nwalkers)
     f.attrs.create("prev_iters", current_iter)
-    f.attrs.create("sweeps", ns_data.walklength)
+    f.attrs.create("sweeps", ns_data.parameters.walklength)
     
 
     for iwalker in range(1,nwalkers+1):
@@ -686,7 +691,7 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
 
 def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
 
-        # nbeads = ns_data.nbeads
+        # nbeads = ns_data.parameters.nbeads
         low_acc_rate = ns_data.low_acc_rate
         high_acc_rate = ns_data.high_acc_rate
 
@@ -694,9 +699,9 @@ def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
 
         rates[0] = adjust_dv(ns_data,clone,active_box,low_acc_rate,high_acc_rate, volume_limit)
         rates[1] = adjust_dr(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
-        if ns_data.nbeads >= 2:
+        if ns_data.parameters.nbeads >= 2:
             rates[2] = adjust_dt(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
-        if ns_data.nbeads >= 4:
+        if ns_data.parameters.nbeads >= 4:
             rates[3] = adjust_dh(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
         rates[4] = adjust_dshear(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
         rates[5] = adjust_dstretch(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
@@ -704,13 +709,16 @@ def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
 
         return rates
     
-def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, processes = 1, verbose = False):
+def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbose = False):
+
+    processes = ns_data.parameters.processes
 
     energies_file = open(ns_data.energies_filename, "a+")
 
 
     if verbose:
         print("Starting Nested Sampling run")
+        print("iter  volume")
             
             
     active_box = ns_data.active_box
@@ -727,37 +735,60 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, proce
 
 
 
-        clone = np.random.randint(1,ns_data.nwalkers+1) #selecting which walker to clone
+        clone = np.random.randint(1,ns_data.parameters.nwalkers+1) #selecting which walker to clone
 
         clone_walker(clone, index_max)
 
-        #Parallelism
-        # active_walkers = np.random.choice(np.setdiff1d(np.arange(1,ns_data.nwalkers+1),index_max,True), processes-1, False)
-        # active_walkers = np.append(clone, active_walkers)
-        # multiwalk = partial(MC_run, ns_data, ns_data.sweeps_per_walk, move_ratio, volume_limit = volume_limit)
 
-        # walk_output = pool.map(MC_run, repeat(ns_data), repeat(ns_data.sweeps_per_walk),
-        #                              repeat(move_ratio),active_walkers, repeat(volume_limit))
-
-
-        # walk_output = pool.map(multiwalk,active_walkers)
-
-        # new_volumes = [i[0] for i in walk_output]
-
-        # ns_data.volumes[active_walkers] = new_volumes
-        # for j,walker in enumerate(active_walkers) :
-        #     ns_data.volumes[walker] = new_volumes[j]
-
-
-        
-        
         if i%ns_data.vis_interval == 0:
             ns_data.write_to_extxyz()
         
         if i%ns_data.mc_adjust_interval == 0:
             adjust_mc_steps(ns_data, clone, active_box, volume_limit)
 
-        new_volume,_ = MC_run(ns_data,ns_data.walklength, move_ratio, index_max,volume_limit)
+        #Parallelism
+        active_walkers = np.random.choice(np.setdiff1d(np.arange(1,ns_data.parameters.nwalkers+1),index_max,True), processes-1, False)
+        active_walkers = np.append(clone, active_walkers)
+        multiwalk = partial(MC_run, ns_data, ns_data.parameters.walklength, move_ratio, volume_limit = volume_limit, return_ase=True)
+
+
+
+        # walk_output = map(MC_run, repeat(ns_data), repeat(ns_data.sweeps_per_walk),
+        #                              repeat(move_ratio),active_walkers, repeat(volume_limit))
+
+        pool = mp.Pool(processes)
+
+
+        walk_output = pool.map(multiwalk,active_walkers)
+
+        pool.close()
+        pool.join()
+
+
+        new_configs = [j for j in walk_output]
+
+
+        # ns_data.volumes[active_walkers] = new_volumes
+        # for j,walker in enumerate(active_walkers) :
+        #     ns_data.volumes[walker] = new_volumes[j]
+
+        for j, walker in enumerate(active_walkers):
+            import_ase_to_ibox(new_configs[j], walker, ns_data)
+            new_volume = alk.box_compute_volume(int(walker))
+            ns_data.volumes[walker] = new_volume
+
+
+
+        
+        
+
+
+        # new_config = MC_run(ns_data,ns_data.walklength, move_ratio, index_max,volume_limit, return_ase=True)
+
+        # import_ase_to_ibox(new_config, index_max, ns_data)
+
+        # new_volume=alk.box_compute_volume(index_max)
+
         
         # clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
         
@@ -769,7 +800,7 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, proce
         # clone_walker(active_box, index_max)
         if i%ns_data.print_interval == 0:
             #print(rates)
-            print(i,volume_limit)
+            print(f"{i:0>4}  {volume_limit}")
 
 
         if i%ns_data.restart_interval == 0:
@@ -790,30 +821,32 @@ def import_ase_to_ibox(atoms, ibox, ns_data):
     """Inputs an ASE atoms object into a simulation cell."""
 
 
-    cell_vectors = atoms.get_cell()
+    cell_vectors = atoms.cell
 
     if cell_vectors.size == 3:
         cell_vectors *= np.eye(3)
-    alk.box_set_cell(ibox,cell_vectors)
+    alk.box_set_cell(int(ibox),cell_vectors)
 
     positions = atoms.get_positions()
 
-    for ichain in range(1,ns_data.nchains+1):
-        chain = alk.alkane_get_chain(ichain,ibox)
-        for ibead in range(ns_data.nbeads):
-            chain[ibead][:] = positions[(ichain-1)*ns_data.nbeads+ibead][:]
+    for ichain in range(1,ns_data.parameters.nchains+1):
+        chain = alk.alkane_get_chain(ichain,int(ibox))
+        for ibead in range(ns_data.parameters.nbeads):
+            chain[ibead][:] = positions[(ichain-1)*ns_data.parameters.nbeads+ibead][:]
 
 
     return
 
 
 def initialise_sim_cells(ns_data):
+
+    """Initialise hs_alkane cells"""
         
-    alk.box_set_num_boxes(ns_data.nwalkers+1) #nwalkers+2 if debugging
+    alk.box_set_num_boxes(ns_data.parameters.nwalkers+1) #nwalkers+2 if debugging
     alk.box_initialise()
     alk.box_set_pbc(1)
-    alk.alkane_set_nchains(ns_data.nchains) 
-    alk.alkane_set_nbeads(ns_data.nbeads)    
+    alk.alkane_set_nchains(ns_data.parameters.nchains) 
+    alk.alkane_set_nbeads(ns_data.parameters.nbeads)    
     alk.alkane_initialise()           
     alk.box_set_isotropic(1)
     alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding

@@ -8,3 +8,5 @@ hsa_ns_output.txt
 energies.txt
 *.hdf5
 __pycache__/
+tests/
+*.txt
