@@ -796,7 +796,6 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
         
         
 
-        ns_data.volumes[index_max] = new_volume #updating the volume of the walker
         # clone_walker(active_box, index_max)
         if i%ns_data.print_interval == 0:
             #print(rates)
