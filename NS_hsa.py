@@ -748,7 +748,7 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
 
         #Parallelism
         active_walkers = np.random.choice(np.setdiff1d(np.arange(1,ns_data.parameters.nwalkers+1),index_max,True), processes-1, False)
-        active_walkers = np.append(clone, active_walkers)
+        active_walkers = np.append(index_max, active_walkers)
         multiwalk = partial(MC_run, ns_data, ns_data.parameters.walklength, move_ratio, volume_limit = volume_limit, return_ase=True)
 
 
