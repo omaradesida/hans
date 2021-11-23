@@ -674,6 +674,7 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
     f.attrs.create("nwalkers", nwalkers)
     f.attrs.create("prev_iters", current_iter)
     f.attrs.create("sweeps", ns_data.parameters.walklength)
+    f.attrs.create("bondlength", ns_data.parameters.bondlength)
     
 
     for iwalker in range(1,nwalkers+1):
@@ -844,8 +845,9 @@ def initialise_sim_cells(ns_data):
     alk.box_set_num_boxes(ns_data.parameters.nwalkers+1) #nwalkers+2 if debugging
     alk.box_initialise()
     alk.box_set_pbc(1)
-    alk.alkane_set_nchains(ns_data.parameters.nchains) 
-    alk.alkane_set_nbeads(ns_data.parameters.nbeads)    
+    alk.alkane_set_nchains(ns_data.parameters.nchains)
+    alk.alkane_set_nbeads(ns_data.parameters.nbeads)   
+    alk.alkane_set_bondlength(ns_data.parameters.bondlength) 
     alk.alkane_initialise()           
     alk.box_set_isotropic(1)
     alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding

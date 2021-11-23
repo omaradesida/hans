@@ -10,11 +10,13 @@ def parse_args():
     parser.add_argument("-c", "--nchains", default = 32, type=int, help = "Number of chains in the simulation box \n")
     parser.add_argument("-b", "--nbeads", default = 1, type=int, help = "Number of beads in each chain \n")
     parser.add_argument("-l", "--walklength", default = 80, type=int, help = "Number of sweep for each random walk step \n")
+    parser.add_argument("-p","--processes",default = 1,type=int, help = "Number of processes to use in parallel when performing random walks.\n")
+    parser.add_argument("-d", "--bondlength", default = 0.4, type=float, help="Distance between hard spheres in a chain")
     parser.add_argument("-R", "--restart", action = "store_true", help = "Whether or not to restart from a previous attempt\n")
     parser.add_argument("-f","--restart_folder",type=str, help =
                         "Configurations file to restart from. Energies and Trajectory file should have the same file naming \
                         convention. \n i.e if restart file is 'foo.restart' energies and trajectory file \
                         should be foo.energies and foo.extxyz")
-    parser.add_argument("-p","--processes",default = int,type=int, help = "Number of processes to use in parallel when performing random walks.\n")
+
 
     return parser.parse_args()

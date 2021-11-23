@@ -18,6 +18,6 @@
 
 
 
-srun python hs_alkane_NS_restart_test.py -i 2e5 -w 500 -b 1 -c 32 -l 160 -t 28800 >> hsa_ns_output.txt
+srun python hans -i 2e4 -R -f NS_32_1mer.100.100.1/ -t 28800 -p 1 >> hsa_ns_output.txt
  
 

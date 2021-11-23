@@ -6,7 +6,7 @@ import cli
 
 class SimulationParameters:
 
-    def __init__(self, nwalkers, nchains, nbeads, walklength, directory, time, previous_iterations, total_iterations, processes):
+    def __init__(self, nwalkers, nchains, nbeads, walklength, directory, time, previous_iterations, total_iterations, processes, bondlength):
         self.nwalkers = nwalkers
         self.nchains = nchains
         self.nbeads = nbeads
@@ -16,6 +16,7 @@ class SimulationParameters:
         self.previous_iterations = previous_iterations
         self.total_iterations = total_iterations
         self.processes = processes
+        self.bondlength = bondlength
 
     @classmethod
     def parse_args(cls, parent_dir="."):
@@ -35,6 +36,7 @@ class SimulationParameters:
         walklength = int(args.walklength)
         total_iterations = int(args.iterations)
         processes = int(args.processes)
+        bondlength=int(args.bondlength)
         
         dir_prefix = f"{parent_dir}/NS_{nchains}_{nbeads}mer.{nwalkers}.{walklength}"
         i_n = 1
@@ -45,7 +47,7 @@ class SimulationParameters:
         directory = f"{dir_prefix}.{i_n}/"    
         os.mkdir(f"{directory}")
 
-        return cls(nwalkers, nchains, nbeads, int(walklength), directory, args.time, 0, total_iterations, processes)
+        return cls(nwalkers, nchains, nbeads, int(walklength), directory, args.time, 0, total_iterations, processes, bondlength)
 
     @classmethod
     def from_restart(cls, args, parent_dir="."):
@@ -64,10 +66,11 @@ class SimulationParameters:
         previous_iterations = int(f.attrs["prev_iters"])
         walklength = int(f.attrs["sweeps"])
         total_iterations = int(args.iterations)
+        bondlength = int(f.attrs['bondlength'])
 
         f.close()
 
-        return cls(nwalkers, nchains, nbeads, walklength, directory, args.time, previous_iterations, total_iterations, processes)
+        return cls(nwalkers, nchains, nbeads, walklength, directory, args.time, previous_iterations, total_iterations, processes, bondlength)
 
     def configure_system(self, max_vol_per_atom=15):
         if self.previous_iterations == 0:

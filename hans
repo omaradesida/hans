@@ -107,8 +107,9 @@ if __name__ == "__main__":
     ##############################################################
 
 
-    snapshots = 1000
-    vis_interval = max(1,parameters.total_iterations//snapshots)
+    #snapshots = 1000
+    #vis_interval = max(1,parameters.total_iterations//snapshots)
+    vis_interval = 1000
 
     # restart_interval = int(5e3)
     # print_interval = int(1e2)
