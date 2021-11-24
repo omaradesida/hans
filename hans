@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
         energies_file.write(f"{ns_data.parameters.nwalkers} {1} {dof} {False} {ns_data.parameters.nchains} \n") #ns_analyse info data
 
-        energies_file.write(f"{ns_data.parameters}\n") #META DATA ABOUT THE RUN
+        #energies_file.write(f"{ns_data.parameters}\n") #META DATA ABOUT THE RUN
 
     energies_file.close()
 
