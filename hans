@@ -49,7 +49,11 @@ if __name__ == "__main__":
     if move_ratio[0] != 0:
         dof+= 3*ns_data.parameters.nchains
     if move_ratio[1] != 0:
-        dof+= 2*ns_data.parameters.nchains
+        if ns_data.parameters.nbeads <= 2:
+            dof+= 2*ns_data.parameters.nchains
+        else:
+            dof+= 3*ns_data.parameters.nchains
+
 
 
 
@@ -57,8 +61,10 @@ if __name__ == "__main__":
 
         print("Creating New Output File")
 
-        energies_file.write(f"{ns_data.parameters.nwalkers} {1} {dof} {False} {ns_data.parameters.nchains} \n")
-        energies_file.write(f"{ns_data.parameters.walklength} {ns_data.parameters.nbeads} {ns_data.parameters.nchains} {ns_data.parameters.nwalkers} \n")
+
+        energies_file.write(f"{ns_data.parameters.nwalkers} {1} {dof} {False} {ns_data.parameters.nchains} \n") #ns_analyse info data
+
+        energies_file.write(f"{ns_data.parameters}\n") #META DATA ABOUT THE RUN
 
     energies_file.close()
 

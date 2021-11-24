@@ -3,6 +3,8 @@ import argparse
 
 def parse_args():
 
+    """Parse command line arguments. Returns an empty Namespace containing the attributes."""
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--iterations", default = 2e5, type=float, help = "Number of iterations to run \n")
     parser.add_argument("-t", "--time", type=float, help = "How much time has been allocated for the program to run")
@@ -14,9 +16,7 @@ def parse_args():
     parser.add_argument("-d", "--bondlength", default = 0.4, type=float, help="Distance between hard spheres in a chain")
     parser.add_argument("-R", "--restart", action = "store_true", help = "Whether or not to restart from a previous attempt\n")
     parser.add_argument("-f","--restart_folder",type=str, help =
-                        "Configurations file to restart from. Energies and Trajectory file should have the same file naming \
-                        convention. \n i.e if restart file is 'foo.restart' energies and trajectory file \
-                        should be foo.energies and foo.extxyz")
+                        "Folder where the restart file is located. In the folder, a restart.hdf5 file must be present in order to resume the simulation.\n")
 
 
     return parser.parse_args()

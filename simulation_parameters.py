@@ -21,7 +21,9 @@ class SimulationParameters:
     @classmethod
     def parse_args(cls, parent_dir="."):
         args = cli.parse_args()
-        print(args)
+        for arg in vars(args):
+            print (f"{arg:<15} {getattr(args, arg)}")
+
         if args.restart:
             parameters = SimulationParameters.from_restart(args, parent_dir)
         else:
@@ -44,7 +46,9 @@ class SimulationParameters:
         while os.path.exists(f"{dir_prefix}.{i_n}/"):
             i_n += 1
         
-        directory = f"{dir_prefix}.{i_n}/"    
+        directory = f"{dir_prefix}.{i_n}/"
+
+        print(f"Creating directory {directory} to output results")
         os.mkdir(f"{directory}")
 
         return cls(nwalkers, nchains, nbeads, int(walklength), directory, args.time, 0, total_iterations, processes, bondlength)
@@ -56,7 +60,12 @@ class SimulationParameters:
         processes = int(args.processes)
         
         directory = f"{parent_dir}/{restart_folder}"
-        print(directory)
+
+        if directory[-1] != "/":
+            directory+="/"
+
+
+        print(f"Attempting to restart from {directory}")
 
         f = h5py.File(f"{directory}restart.hdf5", "r")
 
