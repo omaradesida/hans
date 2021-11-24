@@ -1,4 +1,4 @@
-# hsa_NS
+# hans
 Implementation of a nested sampling algorithm taking advantage of a slightly modified version of David Quigley's hs_alkane package.
 
 One can run a nested sampling calculation of chains using hard sphere potentials, using the `hs_alkane` package to perform Monte Carlo (MC) moves as well as
