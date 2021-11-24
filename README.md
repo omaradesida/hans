@@ -2,9 +2,9 @@
 Implementation of a nested sampling algorithm taking advantage of a slightly modified version of David Quigley's hs_alkane package.
 
 One can run a nested sampling calculation of chains using hard sphere potentials, using the `hs_alkane` package to perform Monte Carlo (MC) moves as well as
-store the particle positions. One can run a nested sampling calculation using the following command:
+store the particle positions. One can run a nested sampling calculation in command line as follows:
 
-`python hs_alkane_NS.py [options]`
+`python hans [options]`
 
 using appropriate values for the arguments.
 <pre>  -h, --help            show this help message and exit
@@ -35,5 +35,7 @@ using appropriate values for the arguments.
 Running the program will generate a folder which contains: a `restart.hdf5` file, allowing simulations to be restarted from from previous runs, an `energies.txt` file which is compatible for use with `ns_analyse` from the `pymatnest` package, and a `traj.extxyz` file, allowing one to view the trajectory with the largest volume after every 1000 iterations. 
 
 Note that the `energies.txt` needs the option `s -1` when using `ns_analyse` as the first line contains metadata about the system, such as the number of beads per chain and the number of walkers. as the system is athermal, the output isn't truly an energy, but a volume, and therefore it may be more accurate when performing analysis to examine the packing fraction of the chains. For this purpose, the intersecting spheres notebook has been written, which demonstrates how to obtain the volume for a chain, as well as an equation that one can use to calculate the volume for a chain of length N. 
+
+NS_hsa.py is a module which also grants the ability to construct slightly different calculations using python, as well as provide some other useful functionalities which a user may require.
 
 
