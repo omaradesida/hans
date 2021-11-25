@@ -18,8 +18,7 @@ import h5py
 #for converting hs_alkane boxes to ASE atoms objects
 from ase import Atoms
 from ase.visualize import view
-# from ase.io import write as asewrite
-
+from ase import io
 
 
 #Setting constants 
@@ -966,12 +965,13 @@ def initialise_sim_cells(ns_data):
     alk.box_initialise()
     alk.box_set_pbc(1)
     alk.alkane_set_nchains(ns_data.parameters.nchains)
-    alk.alkane_set_nbeads(ns_data.parameters.nbeads)   
-    alk.alkane_set_bondlength(ns_data.parameters.bondlength) 
+    alk.alkane_set_nbeads(ns_data.parameters.nbeads)
     alk.alkane_initialise()           
     alk.box_set_isotropic(1)
     alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
-    alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate thes
+    alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
+    alk.alkane_set_bondlength(ns_data.parameters.bondlength)
+
 
 
 

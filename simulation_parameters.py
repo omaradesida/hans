@@ -24,6 +24,7 @@ class SimulationParameters:
         for arg in vars(args):
             print (f"{arg:<15} {getattr(args, arg)}")
 
+
         if args.restart:
             parameters = SimulationParameters.from_restart(args, parent_dir)
         else:
@@ -38,7 +39,7 @@ class SimulationParameters:
         walklength = int(args.walklength)
         total_iterations = int(args.iterations)
         processes = int(args.processes)
-        bondlength=int(args.bondlength)
+        bondlength=args.bondlength
         
         dir_prefix = f"{parent_dir}/NS_{nchains}_{nbeads}mer.{nwalkers}.{walklength}"
         i_n = 1
