@@ -765,6 +765,7 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
     f.attrs.create("prev_iters", current_iter)
     f.attrs.create("sweeps", ns_data.parameters.walklength)
     f.attrs.create("bondlength", ns_data.parameters.bondlength)
+    f.attrs.create("bondangle", ns_data.parameters.bondangle)
     
 
     for iwalker in range(1,nwalkers+1):
@@ -971,6 +972,7 @@ def initialise_sim_cells(ns_data):
     alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
     alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
     alk.alkane_set_bondlength(ns_data.parameters.bondlength)
+    alk.alkane_set_angle(ns_data.parameters.bondangle)
 
 
 

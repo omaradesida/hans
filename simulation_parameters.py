@@ -6,7 +6,7 @@ import cli
 
 class SimulationParameters:
 
-    def __init__(self, nwalkers, nchains, nbeads, walklength, directory, time, previous_iterations, total_iterations, processes, bondlength):
+    def __init__(self, nwalkers, nchains, nbeads, walklength, directory, time, previous_iterations, total_iterations, processes, bondlength, bondangle):
         self.nwalkers = nwalkers
         self.nchains = nchains
         self.nbeads = nbeads
@@ -17,6 +17,7 @@ class SimulationParameters:
         self.total_iterations = total_iterations
         self.processes = processes
         self.bondlength = bondlength
+        self.bondangle = bondangle
 
     @classmethod
     def parse_args(cls, parent_dir="."):
@@ -40,6 +41,7 @@ class SimulationParameters:
         total_iterations = int(args.iterations)
         processes = int(args.processes)
         bondlength=args.bondlength
+        bondangle = args.bondangle
         
         dir_prefix = f"{parent_dir}/NS_{nchains}_{nbeads}mer.{nwalkers}.{walklength}"
         i_n = 1
@@ -52,7 +54,7 @@ class SimulationParameters:
         print(f"Creating directory {directory} to output results")
         os.mkdir(f"{directory}")
 
-        return cls(nwalkers, nchains, nbeads, int(walklength), directory, args.time, 0, total_iterations, processes, bondlength)
+        return cls(nwalkers, nchains, nbeads, walklength, directory, args.time, 0, total_iterations, processes, bondlength, bondangle)
 
     @classmethod
     def from_restart(cls, args, parent_dir="."):
@@ -77,10 +79,11 @@ class SimulationParameters:
         walklength = int(f.attrs["sweeps"])
         total_iterations = int(args.iterations)
         bondlength = int(f.attrs['bondlength'])
+        bondangle = int(f.attrs['bondangle'])
 
         f.close()
 
-        return cls(nwalkers, nchains, nbeads, walklength, directory, args.time, previous_iterations, total_iterations, processes, bondlength)
+        return cls(nwalkers, nchains, nbeads, walklength, directory, args.time, previous_iterations, total_iterations, processes, bondlength, bondangle)
 
     def configure_system(self, max_vol_per_atom=15):
         if self.previous_iterations == 0:
