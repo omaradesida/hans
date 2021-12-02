@@ -914,17 +914,16 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
             #print(rates)
             print(f"{i:0>4}  {volume_limit}")
 
+            
+        if ns_data.time_remaining() < 300:
 
-        if i%ns_data.restart_interval == 0:
+            print("Out of allocated time, writing to file and exiting")
             write_configs_to_hdf(ns_data,i,filename=ns_data.restart_filename)
-            if ns_data.time_remaining() < 1200:
 
-                print("Out of allocated time, writing to file and exiting")
-
-                energies_file.close()
-                # pool.close()
-                # pool.join()
-                sys.exit()
+            energies_file.close()
+            # pool.close()
+            # pool.join()
+            sys.exit()
     energies_file.close()
     # pool.close()
     # pool.join()
