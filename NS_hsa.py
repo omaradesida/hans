@@ -916,7 +916,7 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
 
 
         if i%ns_data.restart_interval == 0:
-            write_configs_to_hdf(ns_data,ns_data.restart_filename)
+            write_configs_to_hdf(ns_data,i,filename=ns_data.restart_filename)
             if ns_data.time_remaining() < 1200:
 
                 print("Out of allocated time, writing to file and exiting")
@@ -972,7 +972,7 @@ def initialise_sim_cells(ns_data):
     alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
     alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
     alk.alkane_set_bondlength(ns_data.parameters.bondlength)
-    alk.alkane_set_angle(ns_data.parameters.bondangle)
+    alk.alkane_set_bondangle(ns_data.parameters.bondangle)
 
 
 
