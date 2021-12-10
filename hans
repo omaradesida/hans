@@ -75,18 +75,15 @@ if __name__ == "__main__":
     initialise_sim_cells(ns_data)
     #alk.alkane_set_bondlength(ns_data.parameters.bondlength)
 
-
-
     #random seeds
-    #np.random.seed(1)
-    #alk.random_set_random_seed(1)
+    # np.random.seed(1)
+    # alk.random_set_random_seed(1)
 
     ###################################################################
 
     #creating initial boxes/loading boxes from restart folder
 
-    parameters.configure_system()
-        
+    parameters.configure_system()        
         
     #setting step sizes
     alk.alkane_set_dr_max(0.65)

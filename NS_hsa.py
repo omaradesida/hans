@@ -28,8 +28,79 @@ move_types = ['box','translate', 'rotate', 'dihedral', 'shear', 'stretch']
 
 ivol = 0; itrans = 1; irot = 2; idih = 3; ishear = 4; istr = 5
 
-shear_step_max = 0.5
-stretch_step_max = 0.5
+
+class mc_step_sizes:
+
+    def __init__(self):
+        self.shear_step_max = float(0.5)
+        self.stretch_step_max = float(0.5)
+
+
+        alk.alkane_set_dr_max(0.65)
+        alk.alkane_set_dt_max(0.43)
+        alk.alkane_set_dh_max(0.4)
+        alk.alkane_set_dv_max(0.5)
+
+        self.vol_step_max = alk.alkane_get_dv_max()
+        self.trans_step_max = alk.alkane_get_dr_max()
+        self.rot_step_max = alk.alkane_get_dt_max()
+        self.dih_step_max = alk.alkane_get_dh_max()
+        
+
+    def set_dshear(self,dx):
+        self.shear_step_max = dx
+        return
+    
+    def set_dstretch(self,dy):
+        self.stretch_step_max = dy
+        return
+
+    def set_dv(self,dv):
+        self.vol_step_max = dv
+        alk.alkane_set_dv_max(dv)
+        return
+
+    def set_dr(self,dr):
+        self.trans_step_max = dr
+        alk.alkane_set_dr_max(dr)
+        return
+
+    def set_dt(self,dt):
+        self.rot_step_max = dt
+        alk.alkane_set_dt_max(dt)
+        return
+
+    def set_dh(self,dh):
+        self.dih_step_max = dh
+        alk.alkane_set_dh_max(dh)
+        return
+    
+    def update_dv(self):
+        alk.alkane_set_dv_max(self.vol_step_max)
+        return
+
+    def update_dr(self):
+        alk.alkane_set_dr_max(self.trans_step_max)
+        return
+    
+    def update_dt(self):
+        alk.alkane_set_dt_max(self.rot_step_max)
+        return
+
+    def update_dh(self):
+        alk.alkane_set_dh_max(self.dih_step_max)
+        return
+
+    def update_steps(self):
+        self.update_dv()
+        self.update_dt()
+        self.update_dr()
+        self.update_dh()
+
+    
+        
+
+
 
 
 
@@ -38,10 +109,10 @@ class ns_info:
     """Object containing most of the parameters required to perform the nested sampling simulation."""
 
     def __init__(self, parameters, from_restart = False):
+
+        self.step_sizes=mc_step_sizes()
         self.parameters = parameters
 
-        self.shear_step_max = float(0.5)
-        self.stretch_step_max = float(0.5)
 
         self.low_acc_rate = float(0.2)
         self.high_acc_rate = float(0.5)
@@ -54,8 +125,10 @@ class ns_info:
 
         self.active_box = parameters.nwalkers+1
 
-    # def __getattr__(self, item):
-    #     return getattr(self.parameters, item)
+    # # def __getattr__(self, item):
+    #     tr
+    # #     return getattr(self.parameters, item)
+    
     
     def time_elapsed(self):
         """Returns the amount of time elapsed since this object was created:
@@ -79,14 +152,14 @@ class ns_info:
         """Set maximum size for shear moves:
             Arguments:
                 dshear_max: The maximum size for shear moves to be set."""
-        self.shear_step_max = dshear_max
+        self.step_sizes.shear_step_max = dshear_max
         return
 
     def set_dstretch_max(self,dstretch_max):
         """Set maximum size for stretch moves:
             Arguments:
                 dstretch_max: The maximum size for stretch moves to be set."""
-        self.stretch_step_max = dstretch_max
+        self.step_sizes.stretch_step_max = dstretch_max
         return
 
     def set_acc_rate_range(self,acc_range):
@@ -352,7 +425,7 @@ def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
         delta_H: Change in the unit cell, used in case the change in the cell should be reverted."""
 
 
-    step_size = ns_data.shear_step_max
+    step_size = ns_data.step_sizes.shear_step_max
     # pick random vector for shear direction
     #np.random.seed(10)
     rnd_vec_ind = np.random.randint(0, 3)
@@ -427,7 +500,7 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
         boltz: 0 if the proposed step has been rejected for being invalid, 1 if it is accepted.
         delta_H: Change in the unit cell, used in case the change in the cell should be reverted."""
 
-    step_size = ns_data.stretch_step_max
+    step_size = ns_data.step_sizes.stretch_step_max
     cell = alk.box_get_cell(int(ibox))
     new_cell = cell.copy()
     rnd_v1_ind = np.random.randint(0, 3)
@@ -466,7 +539,11 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
 
 
         
-def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max, return_ase = False):    
+def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max, return_ase = False):
+
+    ns_data.step_sizes.update_steps()
+
+    # print(alk.alkane_get_dv_max(), alk.alkane_get_dr_max())
     
         
     moves_accepted = np.zeros(6)
@@ -607,14 +684,16 @@ def adjust_dv(ns_data,ibox,active_box, lower_bound,upper_bound, volume_limit, mi
     sweeps = 20
     move_ratio = [1,0,0,0,0,0]
     clone_walker(ibox,active_box)
-    vol,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box, volume_limit)
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box, volume_limit)
     
     r = acceptance_rate[ivol]
     
     if r < lower_bound:
-        alk.alkane_set_dv_max(max(alk.alkane_get_dv_max()/equil_factor, min_dv))
+        ns_data.step_sizes.set_dv(max(alk.alkane_get_dv_max()/equil_factor, min_dv))
     elif r > upper_bound:
-        alk.alkane_set_dv_max(min(alk.alkane_get_dv_max()*equil_factor, 10.0))
+        ns_data.step_sizes.set_dv(min(alk.alkane_get_dv_max()*equil_factor, 10.0))
+
+    
     return r
 
 
@@ -624,14 +703,14 @@ def adjust_dr(ns_data,ibox,active_box, lower_bound,upper_bound, min_dr = 1e-10):
     sweeps = 20
     move_ratio = [0,1,0,0,0,0]
     clone_walker(ibox,active_box)
-    vol,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
     
     r = acceptance_rate[itrans]
     
     if r < lower_bound:
-        alk.alkane_set_dr_max(max(alk.alkane_get_dr_max()/equil_factor,min_dr))
+        ns_data.step_sizes.set_dr(max(alk.alkane_get_dr_max()/equil_factor,min_dr))
     elif r > upper_bound:
-        alk.alkane_set_dr_max(min(alk.alkane_get_dr_max()*equil_factor,10.0))
+        ns_data.step_sizes.set_dr(min(alk.alkane_get_dr_max()*equil_factor,10.0))
     return r
 
 def adjust_dt(ns_data,ibox,active_box, lower_bound,upper_bound, min_dt = 1e-10):
@@ -639,14 +718,14 @@ def adjust_dt(ns_data,ibox,active_box, lower_bound,upper_bound, min_dt = 1e-10):
     sweeps = 20
     move_ratio = [0,0,1,0,0,0]
     clone_walker(ibox,active_box)
-    vol,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
     
     r = acceptance_rate[irot]
     
     if r < lower_bound:
-        alk.alkane_set_dt_max(max(alk.alkane_get_dt_max()/equil_factor, min_dt))
+        ns_data.step_sizes.set_dt(max(alk.alkane_get_dt_max()/equil_factor, min_dt))
     elif r > upper_bound:
-        alk.alkane_set_dt_max(alk.alkane_get_dt_max()*equil_factor)
+        ns_data.step_sizes.set_dt(alk.alkane_get_dt_max()*equil_factor)
     return r
 
 def adjust_dh(ns_data,ibox,active_box, lower_bound,upper_bound, min_dh = 1e-10):
@@ -654,14 +733,14 @@ def adjust_dh(ns_data,ibox,active_box, lower_bound,upper_bound, min_dh = 1e-10):
     sweeps = 20
     move_ratio = [0,0,0,1,0,0]
     clone_walker(ibox,active_box)
-    vol,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
     
     r = acceptance_rate[idih]
     
     if r < lower_bound:
-        alk.alkane_set_dh_max(max(alk.alkane_get_dh_max()/equil_factor,min_dh))
+        ns_data.step_sizes.set_dh(max(alk.alkane_get_dh_max()/equil_factor,min_dh))
     elif r > upper_bound:
-        alk.alkane_set_dh_max(alk.alkane_get_dh_max()*equil_factor)
+        ns_data.step_sizes.set_dh(alk.alkane_get_dh_max()*equil_factor)
     return r
 
 def adjust_dshear(ns_data, ibox,active_box, lower_bound,upper_bound, min_dshear = 1e-5):
@@ -675,9 +754,9 @@ def adjust_dshear(ns_data, ibox,active_box, lower_bound,upper_bound, min_dshear 
     
     
     if r < lower_bound:
-        ns_data.shear_step_max = max((ns_data.shear_step_max*(1/equil_factor), min_dshear))
+        ns_data.step_sizes.set_dshear(max((ns_data.step_sizes.shear_step_max*(1/equil_factor), min_dshear)))
     elif r > upper_bound:
-        ns_data.shear_step_max = ns_data.shear_step_max*equil_factor
+        ns_data.step_sizes.set_dshear(ns_data.step_sizes.shear_step_max*equil_factor)
     return r
 
 def adjust_dstretch(ns_data, ibox,active_box, lower_bound,upper_bound, min_dstretch = 1e-5):
@@ -691,9 +770,9 @@ def adjust_dstretch(ns_data, ibox,active_box, lower_bound,upper_bound, min_dstre
     
     
     if r < lower_bound:
-        ns_data.stretch_step_max = max((ns_data.stretch_step_max*(1.0/equil_factor),min_dstretch))
+        ns_data.step_sizes.set_dstretch(max((ns_data.step_sizes.stretch_step_max*(1.0/equil_factor),min_dstretch)))
     elif r > upper_bound:
-        ns_data.stretch_step_max = ns_data.stretch_step_max*equil_factor
+        ns_data.step_sizes.set_dstretch(ns_data.step_sizes.stretch_step_max*equil_factor)
     return r
 
 def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
@@ -835,7 +914,7 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
             
             
     active_box = ns_data.active_box
-    # pool = mp.Pool(processes = processes)
+    pool = mp.Pool(processes = processes)
 
     for i in range(prev_iters, prev_iters+iterations):
 
@@ -859,58 +938,29 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
         if i%ns_data.mc_adjust_interval == 0:
             adjust_mc_steps(ns_data, clone, active_box, volume_limit)
 
-        #Parallelism
         active_walkers = np.random.choice(np.setdiff1d(np.arange(1,ns_data.parameters.nwalkers+1),index_max,True), processes-1, False)
         active_walkers = np.append(index_max, active_walkers)
-        multiwalk = partial(MC_run, ns_data, ns_data.parameters.walklength, move_ratio, volume_limit = volume_limit, return_ase=True)
+        multiwalk = partial(ase_MC_run, ns_data=ns_data, sweeps=ns_data.parameters.walklength, move_ratio=move_ratio, volume_limit = volume_limit, return_ase=True,
+                        ibox=active_box)
 
 
-
-        # walk_output = map(MC_run, repeat(ns_data), repeat(ns_data.sweeps_per_walk),
-        #                              repeat(move_ratio),active_walkers, repeat(volume_limit))
-
-        pool = mp.Pool(processes)
+        walk_input = [mk_ase_config(j, ns_data.parameters.nbeads, ns_data.parameters.nchains, scaling=1) for j in active_walkers]
+        #list of atomic configurations to walk
 
 
-        walk_output = pool.map(multiwalk,active_walkers)
-
-        pool.close()
-        pool.join()
+        walk_output = pool.map(multiwalk,walk_input)
 
 
         new_configs = [j for j in walk_output]
-
-
-        # ns_data.volumes[active_walkers] = new_volumes
-        # for j,walker in enumerate(active_walkers) :
-        #     ns_data.volumes[walker] = new_volumes[j]
 
         for j, walker in enumerate(active_walkers):
             import_ase_to_ibox(new_configs[j], walker, ns_data)
             new_volume = alk.box_compute_volume(int(walker))
             ns_data.volumes[walker] = new_volume
 
-
-
-        
-        
-
-
-        # new_config = MC_run(ns_data,ns_data.walklength, move_ratio, index_max,volume_limit, return_ase=True)
-
-        # import_ase_to_ibox(new_config, index_max, ns_data)
-
-        # new_volume=alk.box_compute_volume(index_max)
-
-        
-        # clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
-        
-        
-        
-        
-
         # clone_walker(active_box, index_max)
         if i%ns_data.print_interval == 0:
+        # if i %10 ==0:
             #print(rates)
             print(f"{i:0>4}  {volume_limit}")
 
@@ -925,8 +975,8 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
             # pool.join()
             break
     energies_file.close()
-    # pool.close()
-    # pool.join()
+    pool.close()
+    pool.join()
 
 def import_ase_to_ibox(atoms, ibox, ns_data):
     """Inputs an ASE atoms object into a simulation cell.
@@ -972,6 +1022,14 @@ def initialise_sim_cells(ns_data):
     alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
     alk.alkane_set_bondlength(ns_data.parameters.bondlength)
     alk.alkane_set_bondangle(ns_data.parameters.bondangle)
+
+def ase_MC_run(atoms, **kwargs):
+
+    import_ase_to_ibox(atoms, kwargs["ibox"], kwargs["ns_data"])
+
+    new_atoms = MC_run(**kwargs)
+
+    return new_atoms
 
 
 
