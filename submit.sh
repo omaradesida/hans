@@ -18,6 +18,10 @@
 
 
 
+<<<<<<< HEAD
 srun python hans -i 2e4 -w 10 -l 10 -b 1 -c 32 -t 3600 -p 8 >> hsa_ns_output_new_parallel.txt
+=======
+srun python hans -i 2e4 -R -f NS_32_1mer.100.100.1/ -t 28800 -p 1 >> hsa_ns_output.txt
+>>>>>>> 637b15d447cb4d04e0a278e83a5c85d1578dafde
  
 

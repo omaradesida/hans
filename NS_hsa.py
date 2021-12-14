@@ -132,10 +132,8 @@ class ns_info:
 
         self.active_box = parameters.nwalkers+1
 
-    # # def __getattr__(self, item):
-    #     tr
-    # #     return getattr(self.parameters, item)
-    
+    # def __getattr__(self, item):
+    #     return getattr(self.parameters, item)
     
     def time_elapsed(self):
         """Returns the amount of time elapsed since this object was created:
@@ -977,6 +975,12 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
 
 
         walk_input = [mk_ase_config(j, ns_data.parameters.nbeads, ns_data.parameters.nchains, scaling=1) for j in active_walkers]
+
+        for j, walker in enumerate(active_walkers):
+            import_ase_to_ibox(new_configs[j], walker, ns_data)
+            new_volume = alk.box_compute_volume(int(walker))
+            ns_data.volumes[walker] = new_volume
+
 
 
         if i%ns_data.mc_adjust_interval == 0:
