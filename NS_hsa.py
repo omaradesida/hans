@@ -18,8 +18,7 @@ import h5py
 #for converting hs_alkane boxes to ASE atoms objects
 from ase import Atoms
 from ase.visualize import view
-# from ase.io import write as asewrite
-
+from ase import io
 
 
 #Setting constants 
@@ -29,22 +28,98 @@ move_types = ['box','translate', 'rotate', 'dihedral', 'shear', 'stretch']
 
 ivol = 0; itrans = 1; irot = 2; idih = 3; ishear = 4; istr = 5
 
-shear_step_max = 0.5
-stretch_step_max = 0.5
+
+class mc_step_sizes:
+
+    def __init__(self):
+        self.shear_step_max = float(0.5)
+        self.stretch_step_max = float(0.5)
+
+
+        alk.alkane_set_dr_max(0.65)
+        alk.alkane_set_dt_max(0.43)
+        alk.alkane_set_dh_max(0.4)
+        alk.alkane_set_dv_max(0.5)
+
+        self.vol_step_max = alk.alkane_get_dv_max()
+        self.trans_step_max = alk.alkane_get_dr_max()
+        self.rot_step_max = alk.alkane_get_dt_max()
+        self.dih_step_max = alk.alkane_get_dh_max()
+
+        self.min_dv = 1e-10
+        self.min_dr = 1e-10
+        self.min_dt = 1e-10
+        self.min_dh = 1e-10
+        self.min_dshear = 1e-5
+        self.min_dstretch = 1e-5
+        
+
+    def set_dshear(self,dx):
+        self.shear_step_max = dx
+        return
+    
+    def set_dstretch(self,dy):
+        self.stretch_step_max = dy
+        return
+
+    def set_dv(self,dv):
+        self.vol_step_max = dv
+        alk.alkane_set_dv_max(dv)
+        return
+
+    def set_dr(self,dr):
+        self.trans_step_max = dr
+        alk.alkane_set_dr_max(dr)
+        return
+
+    def set_dt(self,dt):
+        self.rot_step_max = dt
+        alk.alkane_set_dt_max(dt)
+        return
+
+    def set_dh(self,dh):
+        self.dih_step_max = dh
+        alk.alkane_set_dh_max(dh)
+        return
+    
+    def update_dv(self):
+        alk.alkane_set_dv_max(self.vol_step_max)
+        return
+
+    def update_dr(self):
+        alk.alkane_set_dr_max(self.trans_step_max)
+        return
+    
+    def update_dt(self):
+        alk.alkane_set_dt_max(self.rot_step_max)
+        return
+
+    def update_dh(self):
+        alk.alkane_set_dh_max(self.dih_step_max)
+        return
+
+    def update_steps(self):
+        self.update_dv()
+        self.update_dt()
+        self.update_dr()
+        self.update_dh()
+
+    
+        
+
+
 
 
 
 class ns_info:
 
-    def __init__(self,nwalkers,nchains,nbeads,sweeps_per_walk,alloted_time, from_restart = False):
-        self.nwalkers = int(nwalkers)
-        self.nchains = int(nchains)
-        self.nbeads = int(nbeads)
-        self.sweeps_per_walk = int(sweeps_per_walk)
+    """Object containing most of the parameters required to perform the nested sampling simulation."""
 
+    def __init__(self, parameters, from_restart = False):
 
-        self.shear_step_max = float(0.5)
-        self.stretch_step_max = float(0.5)
+        self.step_sizes=mc_step_sizes()
+        self.parameters = parameters
+
 
         self.low_acc_rate = float(0.2)
         self.high_acc_rate = float(0.5)
@@ -53,20 +128,25 @@ class ns_info:
 
         self.from_restart = from_restart
 
-        self.alloted_time  = alloted_time
-
         self.start_time = timer()
 
-        self.active_box = nwalkers+1
+        self.active_box = parameters.nwalkers+1
 
+    # # def __getattr__(self, item):
+    #     tr
+    # #     return getattr(self.parameters, item)
+    
     
     def time_elapsed(self):
+        """Returns the amount of time elapsed since this object was created:
+        """
         current_time = timer()
         self.time_elapsed_ = current_time - self.start_time
         return self.time_elapsed_
 
     def time_remaining(self):
-        time_remaining_ = self.alloted_time - self.time_elapsed()
+        """Returns how much time is remaining out of the alloted time for the simulation, assuming this object was created at the beginning of the program"""
+        time_remaining_ = self.parameters.allotted_time - self.time_elapsed()
 
         return time_remaining_
 
@@ -76,22 +156,40 @@ class ns_info:
 
 
     def set_dshear_max(self,dshear_max):
-        self.shear_step_max = dshear_max
+        """Set maximum size for shear moves:
+            Arguments:
+                dshear_max: The maximum size for shear moves to be set."""
+        self.step_sizes.shear_step_max = dshear_max
+        return
 
     def set_dstretch_max(self,dstretch_max):
-        self.stretch_step_max = dstretch_max
+        """Set maximum size for stretch moves:
+            Arguments:
+                dstretch_max: The maximum size for stretch moves to be set."""
+        self.step_sizes.stretch_step_max = dstretch_max
+        return
 
     def set_acc_rate_range(self,acc_range):
+        """Set the lower and upper limit for the acceptance rates when adjusting the size of the MC moves.
+            Arguments:
+                acc_range: Array_like containing two floats, the first of which will be the lower limit for the move acceptance rate, and 
+                           the second of which will be the upper limit for the acceptance rate."""
         if len(acc_range) != 2:
             raise IndexError("'acc_range' should have two values in it")
-        
+        if acc_range[0]>acc_range[1]:
+            raise FloatingPointError("'acc_range[0]' should be less than 'acc_range[1]'")
         self.low_acc_rate = acc_range[0]
         self.high_acc_rate = acc_range[1]
+        return
 
     def set_intervals(self,mc_adjust_interval = None,vis_interval = None, 
                         restart_interval = int(5e3), print_interval = 100):
+        """Set the intervals at which various operations should be performed during the nested sampling run.
+        Arguments:
+            mc_adjust_interval: Set the interval at which the size of the Monte Carlo moves is adjusted. Defaults to nwalkers/2 rounded down.
+            vis_interval: Set the interval at which a configuration is written to an extxyz file. Defaults to """
         if mc_adjust_interval is None:
-            mc_adjust_interval = self.nwalkers//2
+            mc_adjust_interval = max(1,self.parameters.nwalkers//2)
 
         self.mc_adjust_interval = mc_adjust_interval
         
@@ -108,8 +206,12 @@ class ns_info:
 
 
     def check_overlaps(self):
-        overlap_check = np.zeros(self.nwalkers)
-        for ibox in range(1,self.nwalkers+1):
+        """Checks if overlaps are present in any of the simulation boxes.
+        
+            Returns:
+                Overlaps: If 1, overlaps are present in one of the simulation boxes. If 0, no overlaps are present."""
+        overlap_check = np.zeros(self.parameters.nwalkers)
+        for ibox in range(1,self.parameters.nwalkers+1):
             overlap_check[alk.alkane_check_chain_overlap(int(ibox))]
         if np.any(overlap_check):
             print("Overlaps Detected")
@@ -121,9 +223,16 @@ class ns_info:
     def perturb_initial_configs(self, move_ratio, walk_length = 20):
     
         """ Runs a number of Monte Carlo steps on every simulation box, using the move_ratio assigned to it,
-        Checks for overlaps, and returns a dictionary which uses the number for each simulation box as the key for its volume"""
+        Checks for overlaps, and returns a dictionary which uses the number for each simulation box as the key for its volume.
+        
+            Arguments:
+                move_ratio: Which move ratio to use during the Monte Carlo walk.
+                walk_length: How many 'sweeps' to use in the Monte Carlo walk.
+                
+            Returns:
+                self.volumes: A dictionary containing the volumes of all simulation boxes, with the keys corresponding the simulation box number, ibox."""
 
-        nwalkers = self.nwalkers
+        nwalkers = self.parameters.nwalkers
 
         self.volumes = {}
         #start_volumes = []
@@ -137,6 +246,9 @@ class ns_info:
 
 
     def set_directory(self,path="./"):
+        """Set the path to working directory.
+            Arguments:
+                path: Directory where files will be written to."""
 
         self.pwd = path
 
@@ -144,7 +256,9 @@ class ns_info:
         self.traj_filename = f"{path}traj.extxyz"
         self.energies_filename = f"{path}energies.txt"
 
-        self.energies_file = open(self.energies_filename, "a+")
+        return
+
+        # self.energies_file = open(self.energies_filename, "a+")
 
         
 
@@ -153,8 +267,11 @@ class ns_info:
 
 
     def load_volumes(self):
+        """Construct a dictionary containing the volumes of all the simulation boxes in hs_alkane.
+            Returns:
+                self.volumes: A dictionary containing the volumes of all the simulation boxes."""
         self.volumes = {}
-        for ibox in range(1,self.nwalkers+1):
+        for ibox in range(1,self.parameters.nwalkers+1):
             self.volumes[ibox] = alk.box_compute_volume(int(ibox))
 
         #overlap check
@@ -163,39 +280,48 @@ class ns_info:
         return self.volumes
 
     def write_to_extxyz(self, ibox=None):
+        """Writes a single simulation box to file.
+            Arguments:
+                ibox: Simulation box to write. If none, the largest simulation box is used."""
 
         if ibox is None:
             ibox = self.max_vol_index()
 
         
-        max_vol_config = mk_ase_config(ibox,self.nbeads,self.nchains)
+        max_vol_config = mk_ase_config(ibox,self.parameters.nbeads,self.parameters.nchains)
         max_vol_config.wrap()
 
         io.write(self.traj_filename, max_vol_config, append = True)
+        return
 
     def max_vol_index(self):
-        """ Returns index of largest simulation box"""
+        """ Returns index of largest simulation box.
+            Returns: Key corresponding to largest simulation box."""
         self.max_vol_index_ = max(self.volumes, key=self.volumes.get)
         return self.max_vol_index_
 
     def write_all_to_extxyz(self, filename = "dump.extxyz"):
-        for i in range(1,self.nwalkers+1):
-            atoms = mk_ase_config(i,self.nbeads,self.nchains)
-            atoms.wrap()
-            io.write(filename, atoms, append = True)
+        """ Writes all simulation boxes to an extxyz file:
+        Arguments:
+            filename: Name of file to output configurations to."""
+        
+        for i in range(1,self.parameters.nwalkers+1):
+            atoms = mk_ase_config(i,self.parameters.nbeads,self.parameters.nchains)
+            io.write(filename, atoms,format="extxyz", append = True)
 
-
-
-def create_initial_configs(ns_data, max_vol_per_atom = 15):
-    cell_matrix = 0.999*np.eye(3)*np.cbrt(ns_data.nbeads*ns_data.nchains*max_vol_per_atom)#*np.random.uniform(0,1)
-    for ibox in range(1,ns_data.nwalkers+1):
-        alk.box_set_cell(int(ibox),cell_matrix)
-    populate_boxes(ns_data.nwalkers, ns_data.nchains)
-
+        return
 
 
 def mk_ase_config(ibox, Nbeads, Nchains, scaling = 3.75):
-    '''Uses the current state of the alkane model to construct an ASE atoms object'''
+    """Uses the current state of the alkane model to construct an ASE atoms object.
+        Arguments:
+            ibox: Simulation box to convert to ASE object.
+            Nbeads: Number of beads per chain in the configuration.
+            Nchains: Number of chains in the configuration.
+            scaling: A scaling factor to increase or decrease the size of the system by a constant. 3.75 is used as a. 
+                    default as this produces configurations which approximate carbon as they have similar C-C distances.
+        Returns:
+            box_config: ASE atoms object"""
     
     # Create and populate ASE object
     model_positions = np.empty([Nchains*Nbeads, 3])
@@ -212,8 +338,14 @@ def mk_ase_config(ibox, Nbeads, Nchains, scaling = 3.75):
     return box_config  # Returns ASE atom object
 
 def vis_chains(vis_config, nbeads, nchains):
-    '''Takes an ASE atoms object or list thereof and creates a customised ngl viewer 
-       with appropriate settings for our bulk alkane chain models'''
+    """Takes an ASE atoms object or list thereof and creates a customised ngl viewer 
+       with appropriate settings for our bulk alkane chain models.
+       Arguments:
+           vis_config: ASE object containing the configuration to be visualised.
+           nbeads: Number of beads per chain in the configuration.
+           nchains: Number of chains in the configuration.
+        Returns:
+            v: An ngl view instance, viewable in jupyter notebooks."""
 
     met = 0.35
     rad = 1.0
@@ -249,10 +381,17 @@ def vis_chains(vis_config, nbeads, nchains):
 
 
 def min_aspect_ratio(ibox):
+    """Returns the shortest distance between two parallel faces, scaled such that the cell has a volume of 1.
+    Arguments:
+        ibox: Simulation box for which the min_aspect_ratio should be calculated for.
+    Returns:
+        min_aspect_ratio/np.cbrt(vol), A float representing the scaled shortest distance.
+        
+    """
     vol = alk.box_compute_volume(int(ibox))
     cell = alk.box_get_cell(int(ibox)).copy()
-    test_dist = []
-    #returns the shortest distance between two parallel faces, scaled such that the cell has a volume of 1
+    #test_dist = []
+
     min_aspect_ratio = sys.float_info.max
     
     for i in range(3):
@@ -260,7 +399,7 @@ def min_aspect_ratio(ibox):
         vnorm_hat = np.cross(cell[(i+1)%3,:],cell[(i+2)%3,:])
         vnorm_hat = vnorm_hat/(np.sqrt(np.dot(vnorm_hat,vnorm_hat)))
         min_aspect_ratio = min(min_aspect_ratio, abs(np.dot(vnorm_hat,vi)))
-        test_dist.append(abs(np.dot(vnorm_hat,vi)))
+        #test_dist.append(abs(np.dot(vnorm_hat,vi)))
         
     return min_aspect_ratio/np.cbrt(vol)
 
@@ -281,9 +420,19 @@ def min_angle(ibox):
     return min_angle
 
 
-def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 55):
+def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
+    """Perform a box shear move on a simulation box.
+    Arguments:
+        ibox: Simulation box on which to perform the box shear move.
+        ns_data: ns_info object containing simulation parameter information.
+        aspect_ratio_limit: Smallest allowed distance between parallel faces once normalised to unit volume, with larger values being more cubelike.
+        angle_limit: Smallest allowed angle in degrees between two adjacent faces, to prevent the possibly squashing the unit cell.
+    Returns:
+        boltz: 0 if the proposed step has been rejected for being invalid, 1 if it is accepted.
+        delta_H: Change in the unit cell, used in case the change in the cell should be reverted."""
 
-    step_size = ns_data.shear_step_max
+
+    step_size = ns_data.step_sizes.shear_step_max
     # pick random vector for shear direction
     #np.random.seed(10)
     rnd_vec_ind = np.random.randint(0, 3)
@@ -324,17 +473,14 @@ def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 55):
 
     delta_H = new_cell - orig_cell
     
-    #reject due to poor aspect ratio
-
-    
-
-    
     alk.alkane_change_box(int(ibox),delta_H)
     #transform = np.dot(np.linalg.inv(orig_cell), new_cell)
     
     
     angle_limit_rad = angle_limit*np.pi/180
     
+
+    #reject due to poor aspect ratio
     if min_aspect_ratio(ibox) < aspect_ratio_limit:
         boltz = 0
     elif min_angle(ibox) < angle_limit_rad:
@@ -350,8 +496,18 @@ def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 55):
     
     return boltz, delta_H
 
-def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 55):
-    step_size = ns_data.stretch_step_max
+def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):    
+    """Perform a box stretch move on a simulation box.
+    Arguments:
+        ibox: Simulation box on which to perform the box shear move.
+        ns_data: ns_info object containing simulation parameter information.
+        aspect_ratio_limit: Smallest allowed distance between parallel faces once normalised to unit volume, with larger values being more cubelike.
+        angle_limit: Smallest allowed angle in degrees between two adjacent faces, to prevent the possibly squashing the unit cell.
+    Returns:
+        boltz: 0 if the proposed step has been rejected for being invalid, 1 if it is accepted.
+        delta_H: Change in the unit cell, used in case the change in the cell should be reverted."""
+
+    step_size = ns_data.step_sizes.stretch_step_max
     cell = alk.box_get_cell(int(ibox))
     new_cell = cell.copy()
     rnd_v1_ind = np.random.randint(0, 3)
@@ -367,10 +523,9 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 55):
     new_cell[rnd_v2_ind,rnd_v2_ind] *= (1/rv)
     
     delta_H = new_cell - cell
-    print(delta_H)
+    
     
 
-    
     alk.alkane_change_box(int(ibox),delta_H, aspect_ratio_limit = 0.8)
     #transform = np.dot(np.linalg.inv(orig_cell), new_cell)
     
@@ -391,7 +546,11 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 55):
 
 
         
-def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max):    
+def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max, return_ase = False):
+
+    ns_data.step_sizes.update_steps()
+
+    # print(alk.alkane_get_dv_max(), alk.alkane_get_dr_max())
     
         
     moves_accepted = np.zeros(6)
@@ -498,7 +657,12 @@ def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max)
     moves_attempted = np.where(moves_attempted == 0, 1, moves_attempted)
     moves_acceptance_rate = moves_accepted/moves_attempted
 
-    return alk.box_compute_volume(int(ibox)), moves_acceptance_rate
+    if return_ase:
+        atoms =  mk_ase_config(ibox, nbeads, nchains, scaling=1)
+
+        return atoms
+    else:
+        return alk.box_compute_volume(int(ibox)), moves_acceptance_rate
 
 def clone_walker(ibox_source,ibox_clone):
     
@@ -522,19 +686,45 @@ def clone_walker(ibox_source,ibox_clone):
     
     
     
-def adjust_dv(ns_data,ibox,active_box, lower_bound,upper_bound, volume_limit, min_dv = 1e-10):
+def adjust_dv(ns_data,ibox,active_box, lower_bound=0.2,upper_bound=0.5, volume_limit=sys.float_info.max, min_dv = 1e-10):
     equil_factor = 2
     sweeps = 20
     move_ratio = [1,0,0,0,0,0]
     clone_walker(ibox,active_box)
-    vol,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box, volume_limit)
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box, volume_limit)
     
     r = acceptance_rate[ivol]
     
     if r < lower_bound:
-        alk.alkane_set_dv_max(max(alk.alkane_get_dv_max()/equil_factor, min_dv))
+        ns_data.step_sizes.set_dv(max(alk.alkane_get_dv_max()/equil_factor, min_dv))
     elif r > upper_bound:
-        alk.alkane_set_dv_max(min(alk.alkane_get_dv_max()*equil_factor, 10.0))
+        ns_data.step_sizes.set_dv(min(alk.alkane_get_dv_max()*equil_factor, 10.0))
+
+    
+    return r
+
+
+
+def adjust_dv_2(ns_data,pool,configs, lower_bound=0.2,upper_bound=0.5, volume_limit=sys.float_info.max, min_dv = 1e-10):
+    equil_factor = 2
+    sweeps = max(1,10//pool._processes)
+    active_box = ns_data.active_box
+
+    pool.map_async(configs)
+
+    
+
+    move_ratio = [1,0,0,0,0,0]
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box, volume_limit)
+    
+    r = acceptance_rate[ivol]
+    
+    if r < lower_bound:
+        ns_data.step_sizes.set_dv(max(alk.alkane_get_dv_max()/equil_factor, min_dv))
+    elif r > upper_bound:
+        ns_data.step_sizes.set_dv(min(alk.alkane_get_dv_max()*equil_factor, 10.0))
+
+    
     return r
 
 
@@ -544,14 +734,14 @@ def adjust_dr(ns_data,ibox,active_box, lower_bound,upper_bound, min_dr = 1e-10):
     sweeps = 20
     move_ratio = [0,1,0,0,0,0]
     clone_walker(ibox,active_box)
-    vol,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
     
     r = acceptance_rate[itrans]
     
     if r < lower_bound:
-        alk.alkane_set_dr_max(max(alk.alkane_get_dr_max()/equil_factor,min_dr))
+        ns_data.step_sizes.set_dr(max(alk.alkane_get_dr_max()/equil_factor,min_dr))
     elif r > upper_bound:
-        alk.alkane_set_dr_max(min(alk.alkane_get_dr_max()*equil_factor,10.0))
+        ns_data.step_sizes.set_dr(min(alk.alkane_get_dr_max()*equil_factor,10.0))
     return r
 
 def adjust_dt(ns_data,ibox,active_box, lower_bound,upper_bound, min_dt = 1e-10):
@@ -559,14 +749,14 @@ def adjust_dt(ns_data,ibox,active_box, lower_bound,upper_bound, min_dt = 1e-10):
     sweeps = 20
     move_ratio = [0,0,1,0,0,0]
     clone_walker(ibox,active_box)
-    vol,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
     
     r = acceptance_rate[irot]
     
     if r < lower_bound:
-        alk.alkane_set_dt_max(max(alk.alkane_get_dt_max()/equil_factor, min_dt))
+        ns_data.step_sizes.set_dt(max(alk.alkane_get_dt_max()/equil_factor, min_dt))
     elif r > upper_bound:
-        alk.alkane_set_dt_max(alk.alkane_get_dt_max()*equil_factor)
+        ns_data.step_sizes.set_dt(alk.alkane_get_dt_max()*equil_factor)
     return r
 
 def adjust_dh(ns_data,ibox,active_box, lower_bound,upper_bound, min_dh = 1e-10):
@@ -574,14 +764,14 @@ def adjust_dh(ns_data,ibox,active_box, lower_bound,upper_bound, min_dh = 1e-10):
     sweeps = 20
     move_ratio = [0,0,0,1,0,0]
     clone_walker(ibox,active_box)
-    vol,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
     
     r = acceptance_rate[idih]
     
     if r < lower_bound:
-        alk.alkane_set_dh_max(max(alk.alkane_get_dh_max()/equil_factor,min_dh))
+        ns_data.step_sizes.set_dh(max(alk.alkane_get_dh_max()/equil_factor,min_dh))
     elif r > upper_bound:
-        alk.alkane_set_dh_max(alk.alkane_get_dh_max()*equil_factor)
+        ns_data.step_sizes.set_dh(alk.alkane_get_dh_max()*equil_factor)
     return r
 
 def adjust_dshear(ns_data, ibox,active_box, lower_bound,upper_bound, min_dshear = 1e-5):
@@ -595,9 +785,9 @@ def adjust_dshear(ns_data, ibox,active_box, lower_bound,upper_bound, min_dshear 
     
     
     if r < lower_bound:
-        ns_data.shear_step_max = max((ns_data.shear_step_max*(1/equil_factor), min_dshear))
+        ns_data.step_sizes.set_dshear(max((ns_data.step_sizes.shear_step_max*(1/equil_factor), min_dshear)))
     elif r > upper_bound:
-        ns_data.shear_step_max = ns_data.shear_step_max*equil_factor
+        ns_data.step_sizes.set_dshear(ns_data.step_sizes.shear_step_max*equil_factor)
     return r
 
 def adjust_dstretch(ns_data, ibox,active_box, lower_bound,upper_bound, min_dstretch = 1e-5):
@@ -605,35 +795,23 @@ def adjust_dstretch(ns_data, ibox,active_box, lower_bound,upper_bound, min_dstre
     sweeps = 20
     move_ratio = [0,0,0,0,0,1]
     clone_walker(ibox,active_box)
-    vol,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
+    _,acceptance_rate = MC_run(ns_data,sweeps, move_ratio, active_box)
     
     r = acceptance_rate[istr]
     
     
     if r < lower_bound:
-        ns_data.stretch_step_max = max((ns_data.stretch_step_max*(1.0/equil_factor),min_dstretch))
+        ns_data.step_sizes.set_dstretch(max((ns_data.step_sizes.stretch_step_max*(1.0/equil_factor),min_dstretch)))
     elif r > upper_bound:
-        ns_data.stretch_step_max = ns_data.stretch_step_max*equil_factor
+        ns_data.step_sizes.set_dstretch(ns_data.step_sizes.stretch_step_max*equil_factor)
     return r
-
-def populate_boxes(nwalkers,nchains):
-    ncopy = nchains
-    for ibox in range(1,nwalkers+1):
-        for ichain in range(1,ncopy+1):
-            rb_factor = 0
-            alk.alkane_set_nchains(ichain)
-            overlap_flag = 1
-            while rb_factor == 0:
-                rb_factor, ifail = alk.alkane_grow_chain(ichain,int(ibox),1)         
-                if ifail != 0:
-                    rb_factor = 0
 
 def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
     
     """ Runs a number of Monte Carlo steps on every simulation box, using the move_ratio assigned to it,
-    Checks for overlaps, and returns a dictionary which uses the number for each simulation box as the key for its volume"""
+    Checks for overlaps, and returns a dictionary which uses the number for each simulation box as the key for its volume."""
 
-    nwalkers = ns_data.nwalkers
+    nwalkers = ns_data.parameters.nwalkers
 
     volumes = {}
     start_volumes = []
@@ -652,13 +830,13 @@ def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
 
 def celltoxmolstring(atoms):
     
-    """Outputs the cell of an atoms object as a string in a format which can be used to write .xmol files
+    """Outputs the cell of an atoms object as a string in a format which can be used to write .xmol files.
     
     Arguments:
-        atoms: Atoms object for which a cell needs to be returned
+        atoms: Atoms object for which a cell needs to be returned.
         
     Returns:
-        cellstring: String containing the three vectors which compose the cell of the atoms object"""
+        cellstring: String containing the three vectors which compose the cell of the atoms object."""
     
     cell = atoms.cell
     
@@ -672,10 +850,12 @@ def celltoxmolstring(atoms):
     return cellstring
 
 def write_configs_to_hdf(ns_data, current_iter, filename = None):
-    """Write the coordinates of all hs_alkane boxes to a file. Default behavior is to overwrite previous data, 
+    """Write the coordinates of all hs_alkane boxes to a file. Default behavior is to overwrite previous data 
 
     Arguments:
-        filename (default = "configs.mol"): File to write atoms objects to.
+        ns_data: Object containing simulation parameters
+        current_iter: Which iteration of the nested sampling run is being written.
+        filename: File to write atoms objects to. If none, use the filename provided by ns_data
 
     """
     if filename is None:
@@ -683,9 +863,9 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
 
 
 
-    nwalkers = ns_data.nwalkers
-    nbeads = ns_data.nbeads
-    nchains = ns_data.nchains
+    nwalkers = ns_data.parameters.nwalkers
+    nbeads = ns_data.parameters.nbeads
+    nchains = ns_data.parameters.nchains
 
     f = h5py.File(filename, "w")
 
@@ -693,7 +873,9 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
     f.attrs.create("nchains", nchains)
     f.attrs.create("nwalkers", nwalkers)
     f.attrs.create("prev_iters", current_iter)
-    f.attrs.create("sweeps", ns_data.sweeps_per_walk)
+    f.attrs.create("sweeps", ns_data.parameters.walklength)
+    f.attrs.create("bondlength", ns_data.parameters.bondlength)
+    f.attrs.create("bondangle", ns_data.parameters.bondangle)
     
 
     for iwalker in range(1,nwalkers+1):
@@ -709,52 +891,20 @@ def write_configs_to_hdf(ns_data, current_iter, filename = None):
 
     f.close()
 
-def read_data_from_hdf(filename):
-
-    f = h5py.File(filename,"r")
-
-    data = {}
-
-
-    data["nbeads"] = f.attrs["nbeads"]
-    data["nchains"] = f.attrs["nchains"]
-    data["nwalkers"] = f.attrs["nwalkers"]
-    data["prev_iters"] = f.attrs["prev_iters"]
-    data["sweeps_per_walk"] = f.attrs["sweeps"]
-
-    return data
-
-    f.close()
-
-
-def set_configs_from_hdf(filename):
-
-    f = h5py.File(filename,"r")
-
-
-    nbeads = int(f.attrs["nbeads"])
-    nchains = int(f.attrs["nchains"])
-    nwalkers = int(f.attrs["nwalkers"])
-
-    prev_iters = int(f.attrs["prev_iters"])
-    sweeps_per_walk = int(f.attrs["sweeps"])
-
-
-    for iwalker in range(1,nwalkers+1):
-        groupname = f"walker_{iwalker:04d}"
-        cell = f[groupname]["unitcell"][:]
-        alk.box_set_cell(iwalker,cell)
-        new_coords = f[groupname]["coordinates"][:]
-        for ichain in range(nchains):
-            coords = alk.alkane_get_chain(ichain+1,iwalker)
-            for ibead in range(nbeads):
-                coords[ibead] = new_coords[ichain*nbeads+ibead]
-
-    f.close()
-
 def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
+        """Adjusts the size of the MC steps being performed on a box in order to correspond with a set acceptance rate, by performing MC runs on the boxes
+        using only one move type.
+        Arguments:
+            ns_data: ns_info object containing simulation parameters.
+            clone: Which simulation box to use to initialise the system on which the MC run is performed.
+            active_box: Which simulation box to use to perform the runs on which stats are collected for adjusting the rate.
+            volume_limit: The volume limit to be used when determining the acceptance rate of volume moves.
+        Returns:
+            rates: An array containing the acceptance rate for each type of MC move.
 
-        # nbeads = ns_data.nbeads
+        """
+
+        # nbeads = ns_data.parameters.nbeads
         low_acc_rate = ns_data.low_acc_rate
         high_acc_rate = ns_data.high_acc_rate
 
@@ -762,9 +912,9 @@ def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
 
         rates[0] = adjust_dv(ns_data,clone,active_box,low_acc_rate,high_acc_rate, volume_limit)
         rates[1] = adjust_dr(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
-        if ns_data.nbeads >= 2:
+        if ns_data.parameters.nbeads >= 2:
             rates[2] = adjust_dt(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
-        if ns_data.nbeads >= 4:
+        if ns_data.parameters.nbeads >= 4:
             rates[3] = adjust_dh(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
         rates[4] = adjust_dshear(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
         rates[5] = adjust_dstretch(ns_data,clone,active_box,low_acc_rate,high_acc_rate)
@@ -772,15 +922,31 @@ def adjust_mc_steps(ns_data, clone, active_box, volume_limit):
 
         return rates
     
-def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, processes = 1, verbose = False):
+def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbose = False):
+    """Performs a nested sampling run using Monte Carlo walks, producing an energies.txt file, a restart file periodically and a trajectory file.
+    Arguments:
+        ns_data: ns_data object containing the simulation parameters
+        iterations: Number of iterations to perform for the nested sampling run
+        prev_iters: Number of previous iterations carried out during the nested sampling run. Use when working with a restart file.
+        move_ratio: The ratio of moves to be used when performing Monte Carlo walks. Should be an array-like containing six values for each type of move,
+                    corresponding with the moves: [volumes,'translation', rotation, dihedral, shear, stretch]
+        verbose:    Whether or not to print data with runs (WIP)
+                    """
+        
+
+    processes = ns_data.parameters.processes
+
+    energies_file = open(ns_data.energies_filename, "a+")
 
 
     if verbose:
         print("Starting Nested Sampling run")
+        print("iter  volume")
             
             
     active_box = ns_data.active_box
-    # pool = mp.Pool(processes = processes)
+    pool = mp.Pool(processes = processes)
+    mc_adjust_sweeps = max((20//processes, 1))
 
     for i in range(prev_iters, prev_iters+iterations):
 
@@ -789,69 +955,211 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, proce
         volume_limit = ns_data.volumes[index_max] #setting volume limit
 
 
-        ns_data.energies_file.write(f"{i} {ns_data.volumes[index_max]} {ns_data.volumes[index_max]} \n") #writing this volume to output
+        energies_file.write(f"{i} {ns_data.volumes[index_max]} {ns_data.volumes[index_max]} \n") #writing this volume to output
 
 
 
-        clone = np.random.randint(1,ns_data.nwalkers+1) #selecting which walker to clone
+        clone = np.random.randint(1,ns_data.parameters.nwalkers+1) #selecting which walker to clone
 
         clone_walker(clone, index_max)
 
-        #Parallelism
-        # active_walkers = np.random.choice(np.setdiff1d(np.arange(1,ns_data.nwalkers+1),index_max,True), processes-1, False)
-        # active_walkers = np.append(clone, active_walkers)
-        # multiwalk = partial(MC_run, ns_data, ns_data.sweeps_per_walk, move_ratio, volume_limit = volume_limit)
 
-        # walk_output = pool.map(MC_run, repeat(ns_data), repeat(ns_data.sweeps_per_walk),
-        #                              repeat(move_ratio),active_walkers, repeat(volume_limit))
-
-
-        # walk_output = pool.map(multiwalk,active_walkers)
-
-        # new_volumes = [i[0] for i in walk_output]
-
-        # ns_data.volumes[active_walkers] = new_volumes
-        # for j,walker in enumerate(active_walkers) :
-        #     ns_data.volumes[walker] = new_volumes[j]
-
-
-        
-        
         if i%ns_data.vis_interval == 0:
             ns_data.write_to_extxyz()
         
+        # if i%ns_data.mc_adjust_interval == 0:
+        #     adjust_mc_steps(ns_data, clone, active_box, volume_limit)
+
+        active_walkers = np.random.choice(np.setdiff1d(np.arange(1,ns_data.parameters.nwalkers+1),index_max,True), processes-1, False)
+        active_walkers = np.append(index_max, active_walkers)
+        multiwalk = partial(ase_MC_run, ns_data=ns_data, sweeps=ns_data.parameters.walklength, move_ratio=move_ratio, volume_limit = volume_limit, return_ase=True,
+                        ibox=active_box)
+
+
+        walk_input = [mk_ase_config(j, ns_data.parameters.nbeads, ns_data.parameters.nchains, scaling=1) for j in active_walkers]
+
+
         if i%ns_data.mc_adjust_interval == 0:
-            adjust_mc_steps(ns_data, clone, active_box, volume_limit)
+            # adjust_mc_steps(ns_data, clone, active_box, volume_limit)
+            parallel_adjust_mc(walk_input, pool, ns_data=ns_data, sweeps=mc_adjust_sweeps, volume_limit = volume_limit, return_ase=False,
+                        ibox=active_box)
+        #list of atomic configurations to walk
+            pass
 
-        new_volume,_ = MC_run(ns_data,ns_data.sweeps_per_walk, move_ratio, index_max,volume_limit)
-        
-        # clone_walker(clone,active_box) #copies the ibox from first argument onto the second one.
-        
-        
-        
-        
 
-        ns_data.volumes[index_max] = new_volume #updating the volume of the walker
+        walk_output = pool.map(multiwalk,walk_input)
+
+
+        new_configs = [j for j in walk_output]
+
+        for j, walker in enumerate(active_walkers):
+            import_ase_to_ibox(new_configs[j], walker, ns_data)
+            new_volume = alk.box_compute_volume(int(walker))
+            ns_data.volumes[walker] = new_volume
+
         # clone_walker(active_box, index_max)
-        if i%ns_data.print_interval == 0:
+        # if i%ns_data.print_interval == 0:
+        if i %10 ==0:
             #print(rates)
-            print(i,volume_limit)
+            print(f"{i:0>4}  {volume_limit}")
+
+            
+        if ns_data.time_remaining() < 0:
+
+            print("Out of allocated time, writing to file and exiting")
+            write_configs_to_hdf(ns_data,i,filename=ns_data.restart_filename)
+
+            # energies_file.close()
+            # pool.close()
+            # pool.join()
+            break
+    energies_file.close()
+    pool.close()
+    pool.join()
+
+def import_ase_to_ibox(atoms, ibox, ns_data):
+    """Inputs an ASE atoms object into a simulation cell.
+    Arguments:
+        atoms: ns_data object containing the parameters for the simulation.
+        ibox: Which `hs_alkane` simulation box to import the ase data into
+        ns_data: ns_data object containing the simulation parameters
+        """
 
 
-        if i%ns_data.restart_interval == 0:
-            write_configs_to_hdf(ns_data,ns_data.restart_filename)
-            if ns_data.time_remaining() < 1200:
+    cell_vectors = atoms.cell
 
-                print("Out of allocated time, writing to file and exiting")
+    if cell_vectors.size == 3:
+        cell_vectors *= np.eye(3)
+    alk.box_set_cell(int(ibox),cell_vectors)
 
-                ns_data.energies_file.close()
-                # pool.close()
-                # pool.join()
-                sys.exit()
-    ns_data.energies_file.close()
-    # pool.close()
-    # pool.join()
+    positions = atoms.get_positions()
 
+    for ichain in range(1,ns_data.parameters.nchains+1):
+        chain = alk.alkane_get_chain(ichain,int(ibox))
+        for ibead in range(ns_data.parameters.nbeads):
+            chain[ibead][:] = positions[(ichain-1)*ns_data.parameters.nbeads+ibead][:]
+
+
+    return
+
+
+def initialise_sim_cells(ns_data):
+
+    """Initialise hs_alkane cells
+    
+    Arguments:
+        ns_data: ns_data object containing the parameters for the simulation."""
+        
+    alk.box_set_num_boxes(ns_data.parameters.nwalkers+1) #nwalkers+2 if debugging
+    alk.box_initialise()
+    alk.box_set_pbc(1)
+    alk.alkane_set_nchains(ns_data.parameters.nchains)
+    alk.alkane_set_nbeads(ns_data.parameters.nbeads)
+    alk.alkane_initialise()           
+    alk.box_set_isotropic(1)
+    alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
+    alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
+    alk.alkane_set_bondlength(ns_data.parameters.bondlength)
+    alk.alkane_set_bondangle(ns_data.parameters.bondangle)
+
+def ase_MC_run(atoms, **kwargs):
+
+    import_ase_to_ibox(atoms, kwargs["ibox"], kwargs["ns_data"])
+
+    new_atoms = MC_run(**kwargs)
+
+    if kwargs["return_ase"]:
+        return new_atoms
+    else:
+        return new_atoms[0], new_atoms[1]
+
+def parallel_adjust_mc(configs,pool, **kwargs):
+    ns_data = kwargs["ns_data"]
+    lower_bound = 0.2
+    upper_bound = 0.5
+    equil_factor = 2.0
+
+    step_sizes = ns_data.step_sizes
+
+    #perform MC_runs for each move type, collecting stats
+    results_vol =     pool.map_async(partial(ase_MC_run,move_ratio=[1,0,0,0,0,0],**kwargs), configs)
+    results_trans =   pool.map_async(partial(ase_MC_run,move_ratio=[0,1,0,0,0,0],**kwargs), configs)
+
+    if ns_data.parameters.nbeads>=2:
+        results_rot = pool.map_async(partial(ase_MC_run,move_ratio=[0,0,1,0,0,0],**kwargs), configs)
+    else:
+        rate_rot = 0
+
+    if ns_data.parameters.nbeads>=4:
+        results_dih =     pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,1,0,0],**kwargs), configs)
+    else:
+        rate_dih = 0
+    results_shear =   pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,1,0],**kwargs), configs)
+    results_stretch = pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,0,1],**kwargs), configs)
+
+    rate_vol = np.mean([r[1] for r in results_vol.get()])*6
+    if rate_vol < lower_bound:
+        step_sizes.set_dv(max(step_sizes.vol_step_max/equil_factor, step_sizes.min_dv))
+    elif rate_vol > upper_bound:
+        step_sizes.set_dv(min(step_sizes.vol_step_max*equil_factor, 10.0))
+
+    rate_trans = np.mean([r[1] for r in results_trans.get()])*6
+    if rate_trans < lower_bound:
+        step_sizes.set_dr(max(step_sizes.trans_step_max/equil_factor, step_sizes.min_dr))
+    elif rate_trans > upper_bound:
+        step_sizes.set_dr(min(step_sizes.trans_step_max*equil_factor, 10.0))
+
+
+    if ns_data.parameters.nbeads>=2:
+        rate_rot = np.mean([r[1] for r in results_rot.get()])*6
+        if rate_rot < lower_bound:
+            step_sizes.set_dt(max(step_sizes.rot_step_max/equil_factor, step_sizes.min_dt))
+        elif rate_rot > upper_bound:
+            step_sizes.set_dt(step_sizes.rot_step_max*equil_factor)
+
+
+    if ns_data.parameters.nbeads>=4:
+        rate_dih = np.mean([r()[1] for r in results_dih.get()])*6
+        if rate_dih < lower_bound:
+            step_sizes.set_dh(max(step_sizes.dih_step_max/equil_factor, step_sizes.min_dh))
+        elif rate_dih > upper_bound:
+            step_sizes.set_dh(step_sizes.dih_step_max*equil_factor)
+
+
+    rate_shear = np.mean([r[1] for r in results_shear.get()])*6
+    if rate_shear < lower_bound:
+        step_sizes.set_dshear(max(step_sizes.shear_step_max/equil_factor, step_sizes.min_dshear))
+    elif rate_shear > upper_bound:
+        step_sizes.set_dshear(step_sizes.shear_step_max*equil_factor)
+
+    rate_stretch = np.mean([r[1] for r in results_stretch.get()])*6
+    if rate_stretch < lower_bound:
+        step_sizes.set_dstretch(max(step_sizes.stretch_step_max/equil_factor, step_sizes.min_dstretch))
+    elif rate_stretch > upper_bound:
+        step_sizes.set_dstretch(step_sizes.stretch_step_max*equil_factor)
+
+    rate = []
+    rate.append(rate_vol)
+    rate.append(rate_trans)
+    rate.append(rate_rot)
+    rate.append(rate_dih)
+    rate.append(rate_shear)
+    rate.append(rate_stretch)
+
+
+    return rate
+
+
+
+
+    #adjust them at the end, so that
+
+    
+
+
+
+
+    return
 
 
 

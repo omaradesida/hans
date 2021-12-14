@@ -2,7 +2,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=2012
-#SBATCH --time=8:00:00
+#SBATCH --time=1:00:00
 #SBATCH --cpus-per-task=1
 
 ##SBATCH --exclude=markstein.epp.warwick.ac.uk 
@@ -18,6 +18,6 @@
 
 
 
-srun python hs_alkane_NS_restart_test.py -i 2e5 -w 500 -b 1 -c 32 -l 160 >> hsa_ns_output.txt
+srun python hans -i 2e4 -w 10 -l 10 -b 1 -c 32 -t 3600 -p 8 >> hsa_ns_output_new_parallel.txt
  
 
