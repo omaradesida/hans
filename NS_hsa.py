@@ -8,6 +8,7 @@ from timeit import default_timer as timer
 import multiprocessing as mp
 from functools import partial
 from itertools import repeat
+import cProfile
 
 
 #for reading/writing
@@ -513,18 +514,18 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
     if rnd_v1_ind == rnd_v2_ind:
         rnd_v2_ind = (rnd_v2_ind+1) % 3
 
-    rv = 1+np.random.uniform(-step_size, step_size)
+    rv = np.random.uniform(-step_size, step_size)
     #print(rv)
     #rv = 1+0.5
     #transform = np.eye(3)
-    new_cell[rnd_v1_ind,rnd_v1_ind] *= rv
-    new_cell[rnd_v2_ind,rnd_v2_ind] *= (1/rv)
+    new_cell[rnd_v1_ind] *= np.exp(rv)
+    new_cell[rnd_v2_ind] *= np.exp(-rv)
     
     delta_H = new_cell - cell
     
     
 
-    alk.alkane_change_box(int(ibox),delta_H, aspect_ratio_limit = 0.8)
+    alk.alkane_change_box(int(ibox),delta_H)
     #transform = np.dot(np.linalg.inv(orig_cell), new_cell)
     
     angle_limit_rad = angle_limit*np.pi/180
@@ -609,7 +610,7 @@ def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max,
             else:
                 # Attempt a stretch move
                 itype = istr
-                boltz, delta_H = box_shear_step(ibox, ns_data)
+                boltz, delta_H = box_stretch_step(ibox, ns_data)
                 moves_attempted[itype] += 1
 
 
@@ -943,7 +944,7 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
             
             
     active_box = ns_data.active_box
-    pool = mp.Pool(processes = processes)
+    pool = mp.Pool(processes)#, _poolinit)
     mc_adjust_sweeps = max((20//processes, 1))
 
     for i in range(prev_iters, prev_iters+iterations):
@@ -954,7 +955,9 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
 
 
         energies_file.write(f"{i} {ns_data.volumes[index_max]} {ns_data.volumes[index_max]} \n") #writing this volume to output
-
+        
+        if i%ns_data.vis_interval == 0:
+            ns_data.write_to_extxyz()
 
 
         clone = np.random.randint(1,ns_data.parameters.nwalkers+1) #selecting which walker to clone
@@ -962,8 +965,7 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
         clone_walker(clone, index_max)
 
 
-        if i%ns_data.vis_interval == 0:
-            ns_data.write_to_extxyz()
+
         
         # if i%ns_data.mc_adjust_interval == 0:
         #     adjust_mc_steps(ns_data, clone, active_box, volume_limit)
@@ -975,12 +977,6 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
 
 
         walk_input = [mk_ase_config(j, ns_data.parameters.nbeads, ns_data.parameters.nchains, scaling=1) for j in active_walkers]
-
-        for j, walker in enumerate(active_walkers):
-            import_ase_to_ibox(new_configs[j], walker, ns_data)
-            new_volume = alk.box_compute_volume(int(walker))
-            ns_data.volumes[walker] = new_volume
-
 
 
         if i%ns_data.mc_adjust_interval == 0:
@@ -1002,8 +998,8 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
             ns_data.volumes[walker] = new_volume
 
         # clone_walker(active_box, index_max)
-        # if i%ns_data.print_interval == 0:
-        if i %10 ==0:
+        if i%ns_data.print_interval == 0:
+        # if i %10 ==0:
             #print(rates)
             print(f"{i:0>4}  {volume_limit}")
 
@@ -1068,9 +1064,15 @@ def initialise_sim_cells(ns_data):
 
 def ase_MC_run(atoms, **kwargs):
 
+    # if not kwargs["return_ase"]:
+    #     prof.enable()
+
     import_ase_to_ibox(atoms, kwargs["ibox"], kwargs["ns_data"])
 
     new_atoms = MC_run(**kwargs)
+
+    # if not kwargs["return_ase"]:
+    #     prof.disable()
 
     if kwargs["return_ase"]:
         return new_atoms
@@ -1098,8 +1100,8 @@ def parallel_adjust_mc(configs,pool, **kwargs):
         results_dih =     pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,1,0,0],**kwargs), configs)
     else:
         rate_dih = 0
-    results_shear =   pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,1,0],**kwargs), configs)
-    results_stretch = pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,0,1],**kwargs), configs)
+    # results_shear =   pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,1,0],**kwargs), configs)
+    # results_stretch = pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,0,1],**kwargs), configs)
 
     rate_vol = np.mean([r[1] for r in results_vol.get()])*6
     if rate_vol < lower_bound:
@@ -1130,40 +1132,38 @@ def parallel_adjust_mc(configs,pool, **kwargs):
             step_sizes.set_dh(step_sizes.dih_step_max*equil_factor)
 
 
-    rate_shear = np.mean([r[1] for r in results_shear.get()])*6
-    if rate_shear < lower_bound:
-        step_sizes.set_dshear(max(step_sizes.shear_step_max/equil_factor, step_sizes.min_dshear))
-    elif rate_shear > upper_bound:
-        step_sizes.set_dshear(step_sizes.shear_step_max*equil_factor)
+    # rate_shear = np.mean([r[1] for r in results_shear.get()])*6
+    # if rate_shear < lower_bound:
+    #     step_sizes.set_dshear(max(step_sizes.shear_step_max/equil_factor, step_sizes.min_dshear))
+    # elif rate_shear > upper_bound:
+    #     step_sizes.set_dshear(step_sizes.shear_step_max*equil_factor)
 
-    rate_stretch = np.mean([r[1] for r in results_stretch.get()])*6
-    if rate_stretch < lower_bound:
-        step_sizes.set_dstretch(max(step_sizes.stretch_step_max/equil_factor, step_sizes.min_dstretch))
-    elif rate_stretch > upper_bound:
-        step_sizes.set_dstretch(step_sizes.stretch_step_max*equil_factor)
+    # rate_stretch = np.mean([r[1] for r in results_stretch.get()])*6
+    # if rate_stretch < lower_bound:
+    #     step_sizes.set_dstretch(max(step_sizes.stretch_step_max/equil_factor, step_sizes.min_dstretch))
+    # elif rate_stretch > upper_bound:
+    #     step_sizes.set_dstretch(step_sizes.stretch_step_max*equil_factor)
 
     rate = []
     rate.append(rate_vol)
     rate.append(rate_trans)
     rate.append(rate_rot)
     rate.append(rate_dih)
-    rate.append(rate_shear)
-    rate.append(rate_stretch)
+    # rate.append(rate_shear)
+    # rate.append(rate_stretch)
 
 
     return rate
 
+def _poolinit():
+    global prof
+    prof = cProfile.Profile()
+    def fin():
+        prof.dump_stats('adjust_MCprofile-%s.out' % mp.current_process().pid)
+
+    mp.util.Finalize(None, fin, exitpriority=1)
 
 
-
-    #adjust them at the end, so that
-
-    
-
-
-
-
-    return
 
 
 
