@@ -604,7 +604,7 @@ def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max,
             else:
                 # Attempt a stretch move
                 itype = istr
-                boltz, delta_H = box_shear_step(ibox, ns_data)
+                boltz, delta_H = box_stretch_step(ibox, ns_data)
                 moves_attempted[itype] += 1
 
 
