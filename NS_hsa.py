@@ -508,12 +508,12 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
     if rnd_v1_ind == rnd_v2_ind:
         rnd_v2_ind = (rnd_v2_ind+1) % 3
 
-    rv = 1+np.random.uniform(-step_size, step_size)
+    rv = np.random.uniform(-step_size, step_size)
     #print(rv)
     #rv = 1+0.5
     #transform = np.eye(3)
-    new_cell[rnd_v1_ind,rnd_v1_ind] *= rv
-    new_cell[rnd_v2_ind,rnd_v2_ind] *= (1/rv)
+    new_cell[rnd_v1_ind] *= np.exp(rv)
+    new_cell[rnd_v2_ind] *= np.exp(-rv)
     
     delta_H = new_cell - cell
     
