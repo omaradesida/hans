@@ -1132,17 +1132,17 @@ def parallel_adjust_mc(configs,pool, **kwargs):
             step_sizes.set_dh(step_sizes.dih_step_max*equil_factor)
 
 
-    # rate_shear = np.mean([r[1] for r in results_shear.get()])*6
-    # if rate_shear < lower_bound:
-    #     step_sizes.set_dshear(max(step_sizes.shear_step_max/equil_factor, step_sizes.min_dshear))
-    # elif rate_shear > upper_bound:
-    #     step_sizes.set_dshear(step_sizes.shear_step_max*equil_factor)
+    rate_shear = np.mean([r[1] for r in results_shear.get()])*6
+    if rate_shear < lower_bound:
+        step_sizes.set_dshear(max(step_sizes.shear_step_max/equil_factor, step_sizes.min_dshear))
+    elif rate_shear > upper_bound:
+        step_sizes.set_dshear(step_sizes.shear_step_max*equil_factor)
 
-    # rate_stretch = np.mean([r[1] for r in results_stretch.get()])*6
-    # if rate_stretch < lower_bound:
-    #     step_sizes.set_dstretch(max(step_sizes.stretch_step_max/equil_factor, step_sizes.min_dstretch))
-    # elif rate_stretch > upper_bound:
-    #     step_sizes.set_dstretch(step_sizes.stretch_step_max*equil_factor)
+    rate_stretch = np.mean([r[1] for r in results_stretch.get()])*6
+    if rate_stretch < lower_bound:
+        step_sizes.set_dstretch(max(step_sizes.stretch_step_max/equil_factor, step_sizes.min_dstretch))
+    elif rate_stretch > upper_bound:
+        step_sizes.set_dstretch(step_sizes.stretch_step_max*equil_factor)
 
     rate = []
     rate.append(rate_vol)
