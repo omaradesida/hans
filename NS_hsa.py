@@ -480,7 +480,7 @@ def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
     
 
     #reject due to poor aspect ratio
-    if min_aspect_ratio(ibox) < aspect_ratio_limit:
+    if alk.box_min_aspect_ratio(ibox) < aspect_ratio_limit:
         boltz = 0
     elif min_angle(ibox) < angle_limit_rad:
         boltz = 0
@@ -530,7 +530,7 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
     
     angle_limit_rad = angle_limit*np.pi/180
     
-    if min_aspect_ratio(ibox) < aspect_ratio_limit:
+    if alk.box_min_aspect_ratio(ibox) < aspect_ratio_limit:
         boltz = 0
     elif min_angle(ibox) < angle_limit_rad:
         boltz = 0
