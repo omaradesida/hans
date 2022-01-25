@@ -78,8 +78,14 @@ class SimulationParameters:
         previous_iterations = int(f.attrs["prev_iters"])
         walklength = int(f.attrs["sweeps"])
         total_iterations = int(args.iterations)
-        bondlength = int(f.attrs['bondlength'])
-        bondangle = int(f.attrs['bondangle'])
+        try:
+            bondlength = int(f.attrs['bondlength'])
+        except:
+            bondlength = 0.4
+        try:
+            bondangle = int(f.attrs['bondangle'])
+        except:
+            bondangle = 109.7
 
         f.close()
 

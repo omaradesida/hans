@@ -1100,8 +1100,8 @@ def parallel_adjust_mc(configs,pool, **kwargs):
         results_dih =     pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,1,0,0],**kwargs), configs)
     else:
         rate_dih = 0
-    # results_shear =   pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,1,0],**kwargs), configs)
-    # results_stretch = pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,0,1],**kwargs), configs)
+    results_shear =   pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,1,0],**kwargs), configs)
+    results_stretch = pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,0,1],**kwargs), configs)
 
     rate_vol = np.mean([r[1] for r in results_vol.get()])*6
     if rate_vol < lower_bound:
@@ -1149,8 +1149,8 @@ def parallel_adjust_mc(configs,pool, **kwargs):
     rate.append(rate_trans)
     rate.append(rate_rot)
     rate.append(rate_dih)
-    # rate.append(rate_shear)
-    # rate.append(rate_stretch)
+    rate.append(rate_shear)
+    rate.append(rate_stretch)
 
 
     return rate
