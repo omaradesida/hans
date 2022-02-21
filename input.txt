@@ -1,0 +1,9 @@
+nwalkers = 125
+nchains = 32
+nbeads=2
+bondlength = 0.4
+bondangle=109.7
+iterations=100
+walklength = 320
+min_angle = 60
+min_aspect_ratio=0.8

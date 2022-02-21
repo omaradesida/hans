@@ -182,7 +182,7 @@ class ns_info:
         return
 
     def set_intervals(self,mc_adjust_interval = None,vis_interval = None, 
-                        restart_interval = int(5e3), print_interval = 100):
+                        restart_interval = int(5e3), print_interval = 1000):
         """Set the intervals at which various operations should be performed during the nested sampling run.
         Arguments:
             mc_adjust_interval: Set the interval at which the size of the Monte Carlo moves is adjusted. Defaults to nwalkers/2 rounded down.
@@ -419,7 +419,7 @@ def min_angle(ibox):
     return min_angle
 
 
-def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
+def box_shear_step(ibox, step_size, aspect_ratio_limit = 0.8, angle_limit = 60):
     """Perform a box shear move on a simulation box.
     Arguments:
         ibox: Simulation box on which to perform the box shear move.
@@ -430,17 +430,15 @@ def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
         boltz: 0 if the proposed step has been rejected for being invalid, 1 if it is accepted.
         delta_H: Change in the unit cell, used in case the change in the cell should be reverted."""
 
-
-    step_size = ns_data.step_sizes.shear_step_max
     # pick random vector for shear direction
     #np.random.seed(10)
-    rnd_vec_ind = np.random.randint(0, 3)
+    rnd_vec_ind = int(np.floor(alk.random_uniform_random()*3))
     # turn other two into orthonormal pair
     #should I have a pair or should I have a single vector.
     other_vec_ind = list(range(3))
     other_vec_ind.remove(rnd_vec_ind)
-    orig_cell = copy.deepcopy(alk.box_get_cell(int(ibox)))
-    orig_cell_copy = copy.deepcopy(orig_cell)
+    # orig_cell_copy = copy.deepcopy(alk.box_get_cell(int(ibox)))
+    orig_cell_copy = alk.box_get_cell(int(ibox)).copy()
 
     
     v1 = orig_cell_copy[other_vec_ind[0],:]
@@ -453,7 +451,7 @@ def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
 
     if np.isnan(np.sum(v1)) or np.isnan(np.sum(v2)):
         print(v1,v2)
-        print(orig_cell)
+        print(orig_cell_copy)
         sys.exit()
 
 
@@ -466,11 +464,11 @@ def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
 #     rv2 = 0
 
     # create new cell and transformation matrix (matrix is additive)
-    new_cell = orig_cell.copy()
+    new_cell = orig_cell_copy.copy()
 
     new_cell[rnd_vec_ind,:] += rv1*v1 + rv2*v2
 
-    delta_H = new_cell - orig_cell
+    delta_H = new_cell - orig_cell_copy
     
     alk.alkane_change_box(int(ibox),delta_H)
     #transform = np.dot(np.linalg.inv(orig_cell), new_cell)
@@ -495,7 +493,7 @@ def box_shear_step(ibox, ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
     
     return boltz, delta_H
 
-def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):    
+def box_stretch_step(ibox,step_size, aspect_ratio_limit = 0.8, angle_limit = 60):    
     """Perform a box stretch move on a simulation box.
     Arguments:
         ibox: Simulation box on which to perform the box shear move.
@@ -506,11 +504,10 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
         boltz: 0 if the proposed step has been rejected for being invalid, 1 if it is accepted.
         delta_H: Change in the unit cell, used in case the change in the cell should be reverted."""
 
-    step_size = ns_data.step_sizes.stretch_step_max
     cell = alk.box_get_cell(int(ibox))
     new_cell = cell.copy()
-    rnd_v1_ind = np.random.randint(0, 3)
-    rnd_v2_ind = np.random.randint(0, 3)
+    rnd_v1_ind = int(np.floor(alk.random_uniform_random()*3))
+    rnd_v2_ind = int(np.floor(alk.random_uniform_random()*3))
     if rnd_v1_ind == rnd_v2_ind:
         rnd_v2_ind = (rnd_v2_ind+1) % 3
 
@@ -542,7 +539,120 @@ def box_stretch_step(ibox,ns_data, aspect_ratio_limit = 0.8, angle_limit = 45):
     return boltz, delta_H
 
 
+def MC_run_2(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max, return_ase = False,
+dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8):
 
+    #ns_data.step_sizes.update_steps()
+
+    # print(alk.alkane_get_dv_max(), alk.alkane_get_dr_max())
+    moves_accepted = np.zeros(6)
+    moves_attempted = np.zeros(6)
+    nbeads = ns_data["nbeads"]
+    nchains = ns_data["nchains"]
+    
+    isweeps = 0
+    pressure = 0
+    move_prob = np.cumsum(move_ratio)/np.sum(move_ratio)
+    
+    if nbeads == 1:
+        moves_per_sweep = nchains+7 
+    elif nbeads <=3:
+        moves_per_sweep = 2*nchains+7
+    else:
+        moves_per_sweep = (nbeads-1)*nchains+7 
+    #moves_per_sweep selected such that every degree of freedom should 
+    #be changed once on average when a sweep is performed.
+    while isweeps < sweeps:
+        imove=0
+        while imove< moves_per_sweep:
+#             clone_walker(ibox,nwalkers+2)#backup box
+            ichain = int(np.floor(alk.random_uniform_random()*nchains)) # picks a chain at random
+            #should it be from 0 to nchains?
+            current_chain = alk.alkane_get_chain(ichain+1, int(ibox))
+
+            backup_chain = current_chain.copy()
+            xi = np.random.random()
+            if xi < move_prob[ivol]:
+                # Attempt a volume move
+                itype = ivol
+                #clone_walker(ibox, volume_box) #backing up the volume
+                boltz = alk.alkane_box_resize(pressure, int(ibox), 0)
+                moves_attempted[itype] += 1
+            elif xi < move_prob[itrans]:
+                # Attempt a translation move
+                itype = itrans
+                boltz = alk.alkane_translate_chain(ichain+1, int(ibox))
+                moves_attempted[itrans] += 1
+            elif xi < move_prob[irot]:
+                # Attempt a rotation move
+                itype = irot
+                boltz, quat = alk.alkane_rotate_chain(ichain+1, int(ibox), 0)
+                moves_attempted[itype] += 1
+            elif xi < move_prob[idih]:
+                # Attempt a dihedral angle move
+                itype = idih
+                boltz, bead1, angle = alk.alkane_bond_rotate(ichain+1, int(ibox), 1)
+                moves_attempted[itype] += 1
+            elif xi < move_prob[ishear]:
+                # Attempt a shear move
+                itype = ishear
+                boltz, delta_H = box_shear_step(ibox, dshear, min_ar, min_ang)
+                moves_attempted[itype] += 1
+            else:
+                # Attempt a stretch move
+                itype = istr
+                boltz, delta_H = box_stretch_step(ibox, dstretch, min_ar,min_ang)
+                moves_attempted[itype] += 1
+
+
+            #Check which type of move and whether or not to accept
+                    
+            if (itype==ivol):
+                new_volume = alk.box_compute_volume(int(ibox))
+                if (np.random.random() < boltz) and (new_volume - volume_limit) < sys.float_info.epsilon:
+                    moves_accepted[itype]+=1
+
+                else:
+                    #revert volume move
+                    #clone_walker(volume_box, ibox)
+                    dumboltz = alk.alkane_box_resize(pressure, int(ibox), 1)
+
+            
+            elif(itype == ishear or itype == istr):
+                if boltz:
+                    moves_accepted[itype]+=1
+
+                
+                else:
+                    neg_delta_H = -1.0*delta_H
+                    #print(neg_delta_H)
+                    alk.alkane_change_box(int(ibox), neg_delta_H)
+
+                
+
+                
+            else:
+                if (np.random.random() < boltz):
+                #accept the move
+                    moves_accepted[itype]+=1
+
+
+                else:
+                    #reject the move
+                    for ibead in range(nbeads):
+                        current_chain[ibead] = backup_chain[ibead]
+
+            imove += 1
+        isweeps +=1
+    moves_attempted = np.where(moves_attempted == 0, 1, moves_attempted)
+    moves_acceptance_rate = moves_accepted/moves_attempted
+
+    if return_ase:
+        atoms =  mk_ase_config(ibox, nbeads, nchains, scaling=1)
+
+        return atoms
+    else:
+        return alk.box_compute_volume(int(ibox)), moves_acceptance_rate
 
         
 def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max, return_ase = False):
@@ -575,11 +685,11 @@ def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max,
         imove=0
         while imove< moves_per_sweep:
 #             clone_walker(ibox,nwalkers+2)#backup box
-            ichain = np.random.randint(0, high=nchains) # picks a chain at random
+            ichain = int(np.floor(alk.random_uniform_random()*nchains)) # picks a chain at random
             #should it be from 0 to nchains?
             current_chain = alk.alkane_get_chain(ichain+1, int(ibox))
 
-            backup_chain = copy.deepcopy(current_chain)
+            backup_chain = current_chain.copy()
             xi = np.random.random()
             if xi < move_prob[ivol]:
                 # Attempt a volume move
@@ -605,12 +715,12 @@ def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max,
             elif xi < move_prob[ishear]:
                 # Attempt a shear move
                 itype = ishear
-                boltz, delta_H = box_shear_step(ibox, ns_data)
+                boltz, delta_H = box_shear_step(ibox, ns_data.step_sizes.shear_step_max)
                 moves_attempted[itype] += 1
             else:
                 # Attempt a stretch move
                 itype = istr
-                boltz, delta_H = box_stretch_step(ibox, ns_data)
+                boltz, delta_H = box_stretch_step(ibox, ns_data.step_sizes.stretch_step_max)
                 moves_attempted[itype] += 1
 
 
@@ -677,10 +787,9 @@ def clone_walker(ibox_source,ibox_clone):
     alk.box_set_cell(ibox_clone,cell)
     for ichain in range(1,nchains+1):
         original_chain = alk.alkane_get_chain(ichain,ibox_source)
-        original_chain_copy = copy.deepcopy(original_chain)
         clone_chain = alk.alkane_get_chain(ichain,ibox_clone)
         for ibead in range(nbeads):
-            clone_chain[ibead][:] = original_chain_copy[ibead][:]
+            clone_chain[ibead][:] = original_chain[ibead][:]
     
     
     
@@ -810,12 +919,12 @@ def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
     """ Runs a number of Monte Carlo steps on every simulation box, using the move_ratio assigned to it,
     Checks for overlaps, and returns a dictionary which uses the number for each simulation box as the key for its volume."""
 
-    nwalkers = ns_data.parameters.nwalkers
+    nwalkers = ns_data["nwalkers"]
 
     volumes = {}
     start_volumes = []
     for ibox in range(1,nwalkers+1):
-        volumes[ibox], rate = MC_run(ns_data, walk_length, move_ratio, ibox)
+        volumes[ibox], rate = MC_run_2(ns_data, walk_length, move_ratio, ibox)
 
 
     #overlap check
@@ -960,12 +1069,10 @@ def perform_ns_run(ns_data, iterations, prev_iters = 0, move_ratio = None, verbo
             ns_data.write_to_extxyz()
 
 
-        clone = np.random.randint(1,ns_data.parameters.nwalkers+1) #selecting which walker to clone
+        # clone = np.random.randint(1,ns_data.parameters.nwalkers+1) #selecting which walker to clone
+        clone = int(np.floor(alk.random_uniform_random()*ns_data.parameters.nwalkers)+1)
 
         clone_walker(clone, index_max)
-
-
-
         
         # if i%ns_data.mc_adjust_interval == 0:
         #     adjust_mc_steps(ns_data, clone, active_box, volume_limit)
@@ -1025,6 +1132,13 @@ def import_ase_to_ibox(atoms, ibox, ns_data):
         ns_data: ns_data object containing the simulation parameters
         """
 
+    try:
+        nbeads = ns_data.parameters.nbeads
+        nchains = ns_data.parameters.nchains
+    except:
+        nbeads = ns_data["nbeads"]
+        nchains = ns_data["nchains"]
+
 
     cell_vectors = atoms.cell
 
@@ -1034,10 +1148,10 @@ def import_ase_to_ibox(atoms, ibox, ns_data):
 
     positions = atoms.get_positions()
 
-    for ichain in range(1,ns_data.parameters.nchains+1):
+    for ichain in range(1,nchains+1):
         chain = alk.alkane_get_chain(ichain,int(ibox))
-        for ibead in range(ns_data.parameters.nbeads):
-            chain[ibead][:] = positions[(ichain-1)*ns_data.parameters.nbeads+ibead][:]
+        for ibead in range(nbeads):
+            chain[ibead][:] = positions[(ichain-1)*nbeads+ibead][:]
 
 
     return
@@ -1049,18 +1163,33 @@ def initialise_sim_cells(ns_data):
     
     Arguments:
         ns_data: ns_data object containing the parameters for the simulation."""
-        
-    alk.box_set_num_boxes(ns_data.parameters.nwalkers+1) #nwalkers+2 if debugging
-    alk.box_initialise()
-    alk.box_set_pbc(1)
-    alk.alkane_set_nchains(ns_data.parameters.nchains)
-    alk.alkane_set_nbeads(ns_data.parameters.nbeads)
-    alk.alkane_initialise()           
-    alk.box_set_isotropic(1)
-    alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
-    alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
-    alk.alkane_set_bondlength(ns_data.parameters.bondlength)
-    alk.alkane_set_bondangle(ns_data.parameters.bondangle)
+
+    # alk.random_set_random_seed(1)
+    try:
+        alk.box_set_num_boxes(ns_data.parameters.nwalkers+1) #nwalkers+2 if debugging
+        alk.box_initialise()
+        alk.box_set_pbc(1)
+        alk.alkane_set_nchains(ns_data.parameters.nchains)
+        alk.alkane_set_nbeads(ns_data.parameters.nbeads)
+        alk.alkane_initialise()           
+        alk.box_set_isotropic(1)
+        alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
+        alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
+        alk.alkane_set_bondlength(ns_data.parameters.bondlength)
+        alk.alkane_set_bondangle(ns_data.parameters.bondangle)
+    except:
+        alk.box_set_num_boxes(int(ns_data["nwalkers"])) #nwalkers+2 if debugging
+        alk.box_initialise()
+        alk.box_set_pbc(1)
+        alk.alkane_set_nchains(int(ns_data["nchains"]))
+        alk.alkane_set_nbeads(int(ns_data["nbeads"]))
+        alk.alkane_initialise()           
+        alk.box_set_isotropic(1)
+        alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
+        alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
+        alk.alkane_set_bondlength(float(ns_data["bondlength"]))
+        alk.alkane_set_bondangle(float(ns_data["bondangle"]))
+
 
 def ase_MC_run(atoms, **kwargs):
 
@@ -1100,8 +1229,8 @@ def parallel_adjust_mc(configs,pool, **kwargs):
         results_dih =     pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,1,0,0],**kwargs), configs)
     else:
         rate_dih = 0
-    # results_shear =   pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,1,0],**kwargs), configs)
-    # results_stretch = pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,0,1],**kwargs), configs)
+    results_shear =   pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,1,0],**kwargs), configs)
+    results_stretch = pool.map_async(partial(ase_MC_run,move_ratio=[0,0,0,0,0,1],**kwargs), configs)
 
     rate_vol = np.mean([r[1] for r in results_vol.get()])*6
     if rate_vol < lower_bound:
@@ -1163,8 +1292,61 @@ def _poolinit():
 
     mp.util.Finalize(None, fin, exitpriority=1)
 
+def default_move_ratio(ns_data):
+    move_ratio = np.zeros(6)
+    move_ratio[ivol] = 1
+    move_ratio[itrans] = 3.0*ns_data["nchains"]
+    move_ratio[irot] = (2.0*ns_data["nchains"]) if ns_data["nbeads"] >= 2 else 0
+    move_ratio[idih] = 1.0*max(((ns_data["nbeads"]-3.0)*(ns_data["nchains"]),0))
+    move_ratio[ishear] = 3
+    move_ratio[istr] = 3
+    return move_ratio
+
+def create_initial_configs(args, max_vol_per_atom = 15):
+    cell_matrix = 0.999*np.eye(3)*np.cbrt(args["nbeads"]*args["nchains"]*max_vol_per_atom)#*np.random.uniform(0,1)
+    for ibox in range(1,args["nwalkers"]+1):
+        alk.box_set_cell(int(ibox),cell_matrix)
+    populate_boxes(args)
+
+def populate_boxes(args):
+    ncopy = args["nchains"]
+    for ibox in range(1,args["nwalkers"]+1):
+        for ichain in range(1,ncopy+1):
+            rb_factor = 0
+            alk.alkane_set_nchains(ichain)
+            overlap_flag = 1
+            while rb_factor == 0:
+                rb_factor, ifail = alk.alkane_grow_chain(ichain,int(ibox),1) 
+                if ifail != 0:
+                    rb_factor = 0
+
+def write_all_to_extxyz(args,filename = "dump.extxyz"):
+    """ Writes all simulation boxes to an extxyz file:
+    Arguments:
+        filename: Name of file to output configurations to."""
+    
+    for i in range(1,args["nwalkers"]+1):
+        atoms = mk_ase_config(i,args["nbeads"],args["nchains"])
+        io.write(filename, atoms,format="extxyz", append = True)
+
+    return
+
+    # 
+
+# def perform_ns_run_2(args):
 
 
+#     return
+def write_to_extxyz(args,ibox=1,filename="traj.extxyz", parallel = False):
+    """Writes a single simulation box to file.
+        Arguments:
+            ibox: Simulation box to write. If none, the largest simulation box is used."""
+    nbeads = args["nbeads"]
+    nchains = args["nchains"]
 
 
+    max_vol_config = mk_ase_config(ibox,nbeads,nchains)
+    max_vol_config.wrap()
 
+    io.write(filename, max_vol_config, append = True, parallel=parallel)
+    return
