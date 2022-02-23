@@ -9,7 +9,7 @@ import multiprocessing as mp
 from functools import partial
 from itertools import repeat
 import cProfile
-
+from mpi4py import MPI
 
 #for reading/writing
 import h5py
@@ -104,14 +104,7 @@ class mc_step_sizes:
         self.update_dt()
         self.update_dr()
         self.update_dh()
-
-    
-        
-
-
-
-
-
+ 
 class ns_info:
 
     """Object containing most of the parameters required to perform the nested sampling simulation."""
@@ -310,7 +303,6 @@ class ns_info:
 
         return
 
-
 def mk_ase_config(ibox, Nbeads, Nchains, scaling = 3.75):
     """Uses the current state of the alkane model to construct an ASE atoms object.
         Arguments:
@@ -378,7 +370,6 @@ def vis_chains(vis_config, nbeads, nchains):
 
     return v
 
-
 def min_aspect_ratio(ibox):
     """Returns the shortest distance between two parallel faces, scaled such that the cell has a volume of 1.
     Arguments:
@@ -402,7 +393,6 @@ def min_aspect_ratio(ibox):
         
     return min_aspect_ratio/np.cbrt(vol)
 
-
 def min_angle(ibox):
     cell = alk.box_get_cell(int(ibox)).copy()
     min_angle = sys.float_info.max
@@ -417,7 +407,6 @@ def min_angle(ibox):
         min_angle = min(min_angle,vec_angle)
         
     return min_angle
-
 
 def box_shear_step(ibox, step_size, aspect_ratio_limit = 0.8, angle_limit = 60):
     """Perform a box shear move on a simulation box.
@@ -538,7 +527,6 @@ def box_stretch_step(ibox,step_size, aspect_ratio_limit = 0.8, angle_limit = 60)
     
     return boltz, delta_H
 
-
 def MC_run_2(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max, return_ase = False,
 dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8):
 
@@ -653,8 +641,7 @@ dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8):
         return atoms
     else:
         return alk.box_compute_volume(int(ibox)), moves_acceptance_rate
-
-        
+      
 def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max, return_ase = False):
 
     ns_data.step_sizes.update_steps()
@@ -790,10 +777,7 @@ def clone_walker(ibox_source,ibox_clone):
         clone_chain = alk.alkane_get_chain(ichain,ibox_clone)
         for ibead in range(nbeads):
             clone_chain[ibead][:] = original_chain[ibead][:]
-    
-    
-    
-    
+      
 def adjust_dv(ns_data,ibox,active_box, lower_bound=0.2,upper_bound=0.5, volume_limit=sys.float_info.max, min_dv = 1e-10):
     equil_factor = 2
     sweeps = 20
@@ -810,8 +794,6 @@ def adjust_dv(ns_data,ibox,active_box, lower_bound=0.2,upper_bound=0.5, volume_l
 
     
     return r
-
-
 
 def adjust_dv_2(ns_data,pool,configs, lower_bound=0.2,upper_bound=0.5, volume_limit=sys.float_info.max, min_dv = 1e-10):
     equil_factor = 2
@@ -834,8 +816,6 @@ def adjust_dv_2(ns_data,pool,configs, lower_bound=0.2,upper_bound=0.5, volume_li
 
     
     return r
-
-
 
 def adjust_dr(ns_data,ibox,active_box, lower_bound,upper_bound, min_dr = 1e-10):
     equil_factor = 2
@@ -934,7 +914,6 @@ def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
         
 
     return volumes
-
 
 def celltoxmolstring(atoms):
     
@@ -1156,7 +1135,6 @@ def import_ase_to_ibox(atoms, ibox, ns_data):
 
     return
 
-
 def initialise_sim_cells(ns_data):
 
     """Initialise hs_alkane cells
@@ -1189,7 +1167,6 @@ def initialise_sim_cells(ns_data):
         alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
         alk.alkane_set_bondlength(float(ns_data["bondlength"]))
         alk.alkane_set_bondangle(float(ns_data["bondangle"]))
-
 
 def ase_MC_run(atoms, **kwargs):
 
@@ -1331,22 +1308,49 @@ def write_all_to_extxyz(args,filename = "dump.extxyz"):
 
     return
 
-    # 
+def adjust_mc_steps_2(args,comm,move_ratio,vol_max,walklength = 10, lower_bound = 0.2, upper_bound=0.5, 
+                      min_dstep=1e-5*np.ones(6), dv_max=10.0,dr_max=10.0, dshear = 1.0, dstretch=1.0):   
 
-# def perform_ns_run_2(args):
+    size = comm.Get_size()
+    rate = np.zeros(6)
+    avg_rate = np.zeros_like(rate)
+    mc_box = np.random.randint(args["nwalkers"])
 
-
-#     return
-def write_to_extxyz(args,ibox=1,filename="traj.extxyz", parallel = False):
-    """Writes a single simulation box to file.
-        Arguments:
-            ibox: Simulation box to write. If none, the largest simulation box is used."""
-    nbeads = args["nbeads"]
-    nchains = args["nchains"]
-
-
-    max_vol_config = mk_ase_config(ibox,nbeads,nchains)
-    max_vol_config.wrap()
-
-    io.write(filename, max_vol_config, append = True, parallel=parallel)
-    return
+    for i in range(6):
+        move_ratio_matrix = np.eye(6)
+        backup = mk_ase_config(mc_box+1,args["nbeads"],args["nchains"],scaling=1)
+        if move_ratio[i] != 0:
+            rate += MC_run_2(args,walklength, move_ratio_matrix[i],mc_box+1,vol_max,dshear=dshear, dstretch=dstretch)[1]
+            import_ase_to_ibox(backup,mc_box+1,args)
+    comm.Allreduce(rate,avg_rate,op=MPI.SUM)
+    avg_rate = avg_rate/size
+    if move_ratio[0] != 0:
+        if avg_rate[0] < lower_bound:
+            alk.alkane_set_dv_max(max(0.5*alk.alkane_get_dv_max(),min_dstep[0]))
+        elif avg_rate[0] > upper_bound:
+            alk.alkane_set_dv_max(min(2.0*alk.alkane_get_dv_max(),dv_max))
+    if move_ratio[1] != 0:
+        if avg_rate[1] < lower_bound:
+            alk.alkane_set_dr_max(max(0.5*alk.alkane_get_dr_max(),min_dstep[1]))
+        elif avg_rate[1] > upper_bound:
+            alk.alkane_set_dr_max(min(2.0*alk.alkane_get_dr_max(),dr_max))
+    if move_ratio[2] != 0:
+        if avg_rate[2] < lower_bound:
+            alk.alkane_set_dt_max(max(0.5*alk.alkane_get_dt_max(),min_dstep[2]))
+        elif avg_rate[2] > upper_bound:
+            alk.alkane_set_dt_max(2.0*alk.alkane_get_dt_max())
+    if move_ratio[3] != 0:
+        if avg_rate[3] < lower_bound:
+            alk.alkane_set_dh_max(max(0.5*alk.alkane_get_dh_max(),min_dstep[3]))
+        elif avg_rate[3] > upper_bound:
+            alk.alkane_set_dh_max(2.0*alk.alkane_get_dh_max())
+    if move_ratio[4] != 0:
+        if avg_rate[4] < lower_bound:
+            dshear = max(0.5*dshear,min_dstep[4])
+        elif avg_rate[4] > upper_bound:
+            dshear = 2.0*dshear
+    if move_ratio[5] != 0:
+        if avg_rate[5] < lower_bound:
+            dstretch = max(0.5*dstretch,min_dstep[5])
+        elif avg_rate[5] > upper_bound:
+            dstretch  = 2.0*dstretch

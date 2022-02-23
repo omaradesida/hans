@@ -8,8 +8,9 @@ def read_hans_file(filename: str = "input.txt"):
     f = open(filename, "r")
     inputs=f.readlines()
     for line in inputs:
-        key,value=line.split("=")
-        data[key.strip()] = value.strip()
+        if not line.startswith('#'):
+            key,value=line.split("=")
+            data[key.strip()] = value.strip()
     f.close()
     data["nchains"] = int(data["nchains"])
     data["nbeads"] = int(data["nbeads"])
@@ -34,16 +35,50 @@ def read_hans_file(filename: str = "input.txt"):
         data["min_aspect_ratio"] = 0.8
     return data
 
-def write_to_restart(filename,args,rank,current_iter=0,comm=None):
-    f=h5py.File(filename,'w',driver='mpio',comm=MPI.COMM_WORLD)
-    for i in args:
-        f.attrs.create(i,args[i])
-    for iwalker in range(1,args["nwalkers"]+1):
-        groupname = f"walker_{iwalker:04d}"
-        f.create_group(groupname)
-    for i in range(rank*args["nwalkers"], (rank+1)*args["nwalkers"]):
-        tmpgroup = f[f"walker_{iwalker:04d}"]
+def write_to_restart(args,comm,filename = "restart.hdf5",i=0):
+    size = comm.Get_size()
+    rank = comm.Get_rank()
+    if rank==0:
+        f = h5py.File(filename, "w")
+        for j in args:
+            f.attrs.create(j,args[j])
+        f.attrs.create("prev_iters",i+1)
+        for iwalker in range(1,args["nwalkers"]+1):
+            groupname = f"walker_{rank}_{iwalker:04d}"
+            tempgrp = f.create_group(groupname)
+            coords = tempgrp.create_dataset("coordinates",(args["nbeads"]*args["nchains"],3),dtype="float64")
+            unitcell = tempgrp.create_dataset("unitcell",(3,3),dtype="float64")
 
-    
+            unitcell[:] = NS.alk.box_get_cell(iwalker)
+            for ichain in range(args["nchains"]):
+                chain = NS.alk.alkane_get_chain(ichain+1,iwalker)
+                coords[ichain*args["nbeads"]:ichain*args["nbeads"]+(args["nbeads"]), :] = chain
+        for j in range(1,size):
+            config_list = comm.recv(source=j,tag = j)
+            for iwalker in range(1,args["nwalkers"]+1):
+                groupname = f"walker_{j}_{iwalker:04d}"
+                tempgrp = f.create_group(groupname)
+                coords = tempgrp.create_dataset("coordinates",(args["nbeads"]*args["nchains"],3),dtype="float64")
+                unitcell = tempgrp.create_dataset("unitcell",(3,3),dtype="float64")
+
+                unitcell[:] = config_list[iwalker-1].cell
+                for ichain in range(args["nchains"]):
+                    coords[:] = config_list[iwalker-1].positions
+        f.close()
+    else:
+        config_list=[NS.mk_ase_config(ibox+1,args["nbeads"],args["nchains"],1.0) for ibox in range(args["nwalkers"])]
+        comm.ssend(config_list,0,tag=rank)
+
+def write_to_extxyz(args,ibox=1,filename="traj.extxyz", parallel = False):
+    """Writes a single simulation box to file.
+        Arguments:
+            ibox: Simulation box to write. If none, the largest simulation box is used."""
+    nbeads = args["nbeads"]
+    nchains = args["nchains"]
+
+
+    max_vol_config = NS.mk_ase_config(ibox,nbeads,nchains)
+    max_vol_config.wrap()
+
+    NS.io.write(filename, max_vol_config, append = True, parallel=parallel)
     return
-
