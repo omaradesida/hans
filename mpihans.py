@@ -1,3 +1,4 @@
+from re import I
 from timeit import default_timer as timer
 import sys
 from mpi4py import MPI
@@ -9,6 +10,7 @@ import os
 import ase
 import h5py
 import numpy as np
+import signal
 #import cProfile
 
 comm = MPI.COMM_WORLD
@@ -142,9 +144,12 @@ def main():
         f = open(f"volumes.txt","a+")
         if not from_restart:
             f.write(f'{args["nwalkers"]} {1} {dof} {False} {args["nchains"]} \n')
-
-    #comm.Barrier()
+#######################################################################################
+# NESTED SAMPLING LOOP                                                                #
+#######################################################################################
     t0 = timer()
+    interrupted = False
+    signal.signal(signal.SIGTERM, NS.signal_handler)
     i = 0
     for i in range(args["prev_iters"],args["prev_iters"]+int(args["iterations"])):
         local_max = max(vols)
@@ -160,9 +165,6 @@ def main():
             f.write(f"{i} {vol_max:.13f} {vol_max:.13f} \n")
 
         walker_to_clone=comm.bcast(walker_to_clone,root=0)
-        comm.Barrier()
-
-
 
         config_to_clone=None
         if rank==walker_to_clone[0]:
@@ -180,7 +182,6 @@ def main():
         else:
             active_walker = np.random.randint(args["nwalkers"])
 
-        comm.Barrier()
         new_vol,_ = NS.MC_run_2(args,args["walklength"], move_ratio,active_walker+1, volume_limit=vol_max,
                                     min_ar=args["min_aspect_ratio"], min_ang= args["min_angle"],
                                     dshear = dshear, dstretch = dstretch)
@@ -189,9 +190,32 @@ def main():
 
 
         if i%mc_adjust_interval == 0:
-            NS.adjust_mc_steps_2(args,comm,move_ratio,vol_max,walklength = mc_adjust_wl, 
+            r, dshear,dstretch = NS.adjust_mc_steps_2(args,comm,move_ratio,vol_max,walklength = mc_adjust_wl, 
                       min_dstep=min_dstep, dv_max=dv_max,dr_max=dr_max,dshear = dshear, dstretch = dstretch)
-            #print(NS.alk.alkane_get_dv_max(),NS.alk.alkane_get_dr_max(),dshear,dstretch, rank)
+            if rank == 0:
+                print(i,r, NS.alk.alkane_get_dv_max(),NS.alk.alkane_get_dr_max())
+
+        ####restart handler
+
+        if rank == 0:
+            if MPI.WTime() - args["time"] < 30.0:
+                interrupted == True
+
+        interrupted = comm.bcast(interrupted,root=0)
+        if interrupted:
+            if rank == 0:
+                print("Out of allocated time, writing to file and exiting")
+            break
+        if i % 50000 ==0:
+            hans_io.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
+            try:
+                os.remove(f"restart.{i-100000}.hdf5")
+            except:
+                pass
+
+#######################################################################################
+# END NESTED SAMPLING LOOP                                                                #
+#######################################################################################            #print(NS.alk.alkane_get_dv_max(),NS.alk.alkane_get_dr_max(),dshear,dstretch, rank)
     if rank == 0:
         f.close()
 
@@ -199,7 +223,7 @@ def main():
     if rank == 0:
         print("NS RUN TIME TAKEN =", t2-t0)            
         print("writing restart")
-    hans_io.write_to_restart(args,comm,filename = "restart.hdf5",i=0)
+    hans_io.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
 
     sys.stdout.flush()
     NS.alk.alkane_destroy()

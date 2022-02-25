@@ -7,8 +7,10 @@ def read_hans_file(filename: str = "input.txt"):
     data = {}
     f = open(filename, "r")
     inputs=f.readlines()
+    inputs=[line for line in inputs if line]
     for line in inputs:
         if not line.startswith('#'):
+            print(line)
             key,value=line.split("=")
             data[key.strip()] = value.strip()
     f.close()
@@ -17,6 +19,7 @@ def read_hans_file(filename: str = "input.txt"):
     data["nwalkers"] = int(data["nwalkers"])
     data["walklength"] = int(data["walklength"])
     data["iterations"] = float(data["iterations"])
+    data["time"] = float(data["time"])
     if "bondlength" in data:
         data["bondlength"] = float(data["bondlength"])
     else:

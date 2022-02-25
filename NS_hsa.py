@@ -1309,6 +1309,7 @@ def write_all_to_extxyz(args,filename = "dump.extxyz"):
     return
 
 def adjust_mc_steps_2(args,comm,move_ratio,vol_max,walklength = 10, lower_bound = 0.2, upper_bound=0.5, 
+
                       min_dstep=1e-5*np.ones(6), dv_max=10.0,dr_max=10.0, dshear = 1.0, dstretch=1.0):   
 
     size = comm.Get_size()
@@ -1354,3 +1355,8 @@ def adjust_mc_steps_2(args,comm,move_ratio,vol_max,walklength = 10, lower_bound 
             dstretch = max(0.5*dstretch,min_dstep[5])
         elif avg_rate[5] > upper_bound:
             dstretch  = 2.0*dstretch
+    return avg_rate, dshear, dstretch
+
+def signal_handler(signal, frame):
+    global interrupted
+    interrupted = True
