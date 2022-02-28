@@ -51,7 +51,7 @@ def main():
             if "directory" in args:
                 dir_prefix = args["directory"]
             else:
-                dir_prefix = f"NeSa_{args['nchains']}_{args['nbeads']}mer.{args['nwalkers']}.{args['walklength']}"
+                dir_prefix = f"NeSa_{args['nchains']}_{args['nbeads']}mer.{args['nwalkers']*size}.{args['walklength']*size}"
                 i_n = 1
             while os.path.exists(f"{dir_prefix}.{i_n}/"):
                 i_n += 1
@@ -192,13 +192,13 @@ def main():
         if i%mc_adjust_interval == 0:
             r, dshear,dstretch = NS.adjust_mc_steps_2(args,comm,move_ratio,vol_max,walklength = mc_adjust_wl, 
                       min_dstep=min_dstep, dv_max=dv_max,dr_max=dr_max,dshear = dshear, dstretch = dstretch)
-            if rank == 0:
-                print(i,r, NS.alk.alkane_get_dv_max(),NS.alk.alkane_get_dr_max())
+            # if rank == 0:
+            #     print(i,r, NS.alk.alkane_get_dv_max(),NS.alk.alkane_get_dr_max())
 
         ####restart handler
 
         if rank == 0:
-            if MPI.WTime() - args["time"] < 30.0:
+            if MPI.Wtime() - args["time"] < 30.0:
                 interrupted == True
 
         interrupted = comm.bcast(interrupted,root=0)
