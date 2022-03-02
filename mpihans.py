@@ -41,7 +41,8 @@ def main():
     args = {}
     from_restart = None
     if rank == 0:
-        args = hans_io.read_hans_file() #parsing input file
+        cl_args = hans_io.parse_args()
+        args = hans_io.read_hans_file(cl_args.input_file) #parsing input file
         if "from_restart" in args and int(args["from_restart"]):
                 print(f"Attempting to restart from {directory}")
                 from_restart = True
@@ -149,7 +150,7 @@ def main():
 #######################################################################################
     t0 = timer()
     interrupted = False
-    signal.signal(signal.SIGTERM, NS.signal_handler)
+    #signal.signal(signal.SIGTERM, NS.signal_handler)
     i = 0
     for i in range(args["prev_iters"],args["prev_iters"]+int(args["iterations"])):
         local_max = max(vols)
@@ -176,7 +177,7 @@ def main():
         if rank == vol_max_index[0]:
             if i%100 == 0:
                 hans_io.write_to_extxyz(args,vol_max_index[1]+1, filename=f"traj.extxyz")
-                print(i, vol_max)
+                #print(i, vol_max)
             active_walker = vol_max_index[1]
             NS.import_ase_to_ibox(config_to_clone,active_walker+1,args)
         else:
@@ -192,8 +193,8 @@ def main():
         if i%mc_adjust_interval == 0:
             r, dshear,dstretch = NS.adjust_mc_steps_2(args,comm,move_ratio,vol_max,walklength = mc_adjust_wl, 
                       min_dstep=min_dstep, dv_max=dv_max,dr_max=dr_max,dshear = dshear, dstretch = dstretch)
-            # if rank == 0:
-            #     print(i,r, NS.alk.alkane_get_dv_max(),NS.alk.alkane_get_dr_max())
+            if rank == 0:
+                print(i,vol_max,r)
 
         ####restart handler
 
@@ -215,7 +216,8 @@ def main():
 
 #######################################################################################
 # END NESTED SAMPLING LOOP                                                                #
-#######################################################################################            #print(NS.alk.alkane_get_dv_max(),NS.alk.alkane_get_dr_max(),dshear,dstretch, rank)
+#######################################################################################
+# #print(NS.alk.alkane_get_dv_max(),NS.alk.alkane_get_dr_max(),dshear,dstretch, rank)
     if rank == 0:
         f.close()
 

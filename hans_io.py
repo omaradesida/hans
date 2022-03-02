@@ -1,6 +1,18 @@
 import h5py
 import NS_hsa as NS
 from mpi4py import MPI
+import argparse
+
+def parse_args():
+
+    """Parse command line arguments. Returns an empty Namespace containing the attributes."""
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-f","--input_file",type=str,default = "input.txt", help =
+                        "Which input file to use for the nested sampling simulation.\n")
+
+
+    return parser.parse_args()
 
 def read_hans_file(filename: str = "input.txt"):
     """Parse input from a file"""
@@ -10,7 +22,6 @@ def read_hans_file(filename: str = "input.txt"):
     inputs=[line for line in inputs if line]
     for line in inputs:
         if not line.startswith('#'):
-            print(line)
             key,value=line.split("=")
             data[key.strip()] = value.strip()
     f.close()
