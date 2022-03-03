@@ -47,6 +47,8 @@ def read_hans_file(filename: str = "input.txt"):
         data["min_aspect_ratio"] = float(data["min_aspect_ratio"])
     else:
         data["min_aspect_ratio"] = 0.8
+    if not "restart_file" in data:
+        data["restart_file"] = "restart.hdf5"
     return data
 
 def write_to_restart(args,comm,filename = "restart.hdf5",i=0):

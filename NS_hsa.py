@@ -1135,38 +1135,27 @@ def import_ase_to_ibox(atoms, ibox, ns_data):
 
     return
 
-def initialise_sim_cells(ns_data):
+def initialise_sim_cells(args, quiet):
 
     """Initialise hs_alkane cells
     
     Arguments:
         ns_data: ns_data object containing the parameters for the simulation."""
 
+
     # alk.random_set_random_seed(1)
-    try:
-        alk.box_set_num_boxes(ns_data.parameters.nwalkers+1) #nwalkers+2 if debugging
-        alk.box_initialise()
-        alk.box_set_pbc(1)
-        alk.alkane_set_nchains(ns_data.parameters.nchains)
-        alk.alkane_set_nbeads(ns_data.parameters.nbeads)
-        alk.alkane_initialise()           
-        alk.box_set_isotropic(1)
-        alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
-        alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
-        alk.alkane_set_bondlength(ns_data.parameters.bondlength)
-        alk.alkane_set_bondangle(ns_data.parameters.bondangle)
-    except:
-        alk.box_set_num_boxes(int(ns_data["nwalkers"])) #nwalkers+2 if debugging
-        alk.box_initialise()
-        alk.box_set_pbc(1)
-        alk.alkane_set_nchains(int(ns_data["nchains"]))
-        alk.alkane_set_nbeads(int(ns_data["nbeads"]))
-        alk.alkane_initialise()           
-        alk.box_set_isotropic(1)
-        alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
-        alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
-        alk.alkane_set_bondlength(float(ns_data["bondlength"]))
-        alk.alkane_set_bondangle(float(ns_data["bondangle"]))
+    alk.box_set_quiet(quiet)
+    alk.box_set_num_boxes(int(args["nwalkers"])) #nwalkers+2 if debugging
+    alk.box_initialise()
+    alk.box_set_pbc(1)
+    alk.alkane_set_nchains(int(args["nchains"]))
+    alk.alkane_set_nbeads(int(args["nbeads"]))
+    alk.alkane_initialise()           
+    alk.box_set_isotropic(1)
+    alk.box_set_bypass_link_cells(1) # Bypass use of link cell algorithm for neighbour finding
+    alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
+    alk.alkane_set_bondlength(float(args["bondlength"]))
+    alk.alkane_set_bondangle(float(args["bondangle"]))
 
 def ase_MC_run(atoms, **kwargs):
 

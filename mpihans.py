@@ -1,16 +1,15 @@
-from re import I
 from timeit import default_timer as timer
 import sys
 from mpi4py import MPI
 import NS_hsa as NS
 import hans_io
-from numpy.random import MT19937
-from numpy.random import RandomState, SeedSequence
+#from numpy.random import MT19937
+#from numpy.random import RandomState, SeedSequence
 import os
-import ase
+#import ase
 import h5py
 import numpy as np
-import signal
+#import signal
 #import cProfile
 
 comm = MPI.COMM_WORLD
@@ -69,28 +68,21 @@ def main():
         args["prev_iters"] = 0
 
     if from_restart:
-        f = h5py.File("restart.hdf5", "r")
+        f = h5py.File(args["restart_file"], "r")
+        if rank == 0:
+            print("From Restart")
         for i in f.attrs:
             args[i] = f.attrs[i]
 
+
     else:
-        print("New Run")
-        args["nchains"] = int(args["nchains"])
-        args["nbeads"] = int(args["nbeads"])
-        args["nwalkers"] = int(args["nwalkers"])
-        args["walklength"] = int(args["walklength"])
-        args["bondlength"] = float(args["bondlength"])
-        args["bondangle"] = float(args["bondangle"])
-        args["iterations"] = float(args["iterations"])
-        args["min_angle"] = float(args["min_angle"])
-        args["min_aspect_ratio"] = float(args["min_aspect_ratio"])
+        if rank == 0:
+            print("New Run")
         
 
     if rank == 0:
         for arg in args:
                 print (f"{arg:<16} {args[arg]}")
-
-
 
     # args = comm.bcast(args,root=0) #broadcasting input arguments
     # directory = comm.bcast(directory,root=0) #broadcasting input arguments
@@ -99,7 +91,12 @@ def main():
 
     # rs = RandomState(MT19937(SeedSequence(2451))) #random seed
 
-    NS.initialise_sim_cells(args) #initialise data structures
+    if rank:
+        quiet = 1
+    else:
+        quiet = 0
+
+    NS.initialise_sim_cells(args,quiet = quiet) #initialise data structures
 
     NS.alk.alkane_set_dr_max(2.0) #set step sizes
     NS.alk.alkane_set_dt_max(0.43)
