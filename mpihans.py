@@ -149,7 +149,6 @@ def main():
     t0 = timer()
     interrupted = False
     #signal.signal(signal.SIGTERM, NS.signal_handler)
-    i = 0
     for i in range(args["prev_iters"],args["prev_iters"]+int(args["iterations"])):
         local_max = max(vols)
         local_max_index = [rank,vols.index(local_max)]
@@ -181,7 +180,7 @@ def main():
         else:
             active_walker = np.random.randint(args["nwalkers"])
 
-        new_vol,_ = NS.MC_run_2(args,args["walklength"], move_ratio,active_walker+1, volume_limit=vol_max,
+        new_vol,_ = NS.MC_run(args,args["walklength"], move_ratio,active_walker+1, volume_limit=vol_max,
                                     min_ar=args["min_aspect_ratio"], min_ang= args["min_angle"],
                                     dshear = dshear, dstretch = dstretch)
 
@@ -189,7 +188,7 @@ def main():
 
 
         if i%mc_adjust_interval == 0:
-            r, dshear,dstretch = NS.adjust_mc_steps_2(args,comm,move_ratio,vol_max,walklength = mc_adjust_wl, 
+            r, dshear,dstretch = NS.adjust_mc_steps(args,comm,move_ratio,vol_max,walklength = mc_adjust_wl, 
                       min_dstep=min_dstep, dv_max=dv_max,dr_max=dr_max,dshear = dshear, dstretch = dstretch)
             if rank == 0:
                 print(i,vol_max,r)
@@ -205,7 +204,7 @@ def main():
             if rank == 0:
                 print("Out of allocated time, writing to file and exiting")
             break
-        if i % 50000 ==0:
+        if i+1 % 50000 ==0:
             hans_io.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
             try:
                 os.remove(f"restart.{i-100000}.hdf5")
