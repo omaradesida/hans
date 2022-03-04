@@ -43,7 +43,7 @@ def main():
         cl_args = hans_io.parse_args()
         args = hans_io.read_hans_file(cl_args.input_file) #parsing input file
         if "from_restart" in args and int(args["from_restart"]):
-                print(f"Attempting to restart from {directory}")
+                print(f"Attempting to restart from {args['directory']}")
                 from_restart = True
                 directory = args["directory"] 
         else:
@@ -72,7 +72,8 @@ def main():
         if rank == 0:
             print("From Restart")
         for i in f.attrs:
-            args[i] = f.attrs[i]
+            if i != "iterations":
+                args[i] = f.attrs[i]
 
 
     else:
@@ -236,4 +237,5 @@ if __name__ == "__main__":
     # prof.disable()
     # prof.dump_stats(f"mpihans{rank}.profile")
     # print("All good G")
+    exit()
 
