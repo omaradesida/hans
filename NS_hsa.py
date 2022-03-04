@@ -466,6 +466,11 @@ def initialise_sim_cells(args, quiet):
 
 
 def default_move_ratio(ns_data):
+    if "move_ratio" in ns_data:
+        move_ratio = [float(i) for i in ns_data["move_ratio"].split(',')]
+        assert len(move_ratio) == 6, "Move ratio array should be of length 6."
+        pass
+        return move_ratio
     move_ratio = np.zeros(6)
     move_ratio[ivol] = 1
     move_ratio[itrans] = 3.0*ns_data["nchains"]
