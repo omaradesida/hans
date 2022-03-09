@@ -6,7 +6,7 @@ import hans_io
 #from numpy.random import MT19937
 #from numpy.random import RandomState, SeedSequence
 import os
-#import ase
+import ase.io
 import h5py
 import numpy as np
 #import signal
@@ -15,6 +15,7 @@ import numpy as np
 comm = MPI.COMM_WORLD
 size = comm.Get_size()
 rank = comm.Get_rank()
+t0 = MPI.Wtime()
 
 def main():
     #constants for MC adjust stuff
@@ -32,8 +33,7 @@ def main():
 
     mc_adjust_wl = max(10//size,1)
 
-    dstretch = 1.0  # initial stretch and shear move sizes
-    dshear = 1.0
+    traj_interval = 100
     
     #############################################################################
     directory = None
@@ -45,7 +45,7 @@ def main():
         if "from_restart" in args and int(args["from_restart"]):
                 print(f"Attempting to restart from {args['directory']}")
                 from_restart = True
-                directory = args["directory"] 
+                directory = args["directory"]
         else:
             from_restart = False
             if "directory" in args:
@@ -68,25 +68,28 @@ def main():
         args["prev_iters"] = 0
 
     if from_restart:
-        f = h5py.File(args["restart_file"], "r")
+        f = h5py.File(args["restart_file"], "r")            
+        for i in f.attrs:
+            if (i != "iterations") and (i!="restart_file"):
+                args[i] = f.attrs[i]
+        f.close()
         if rank == 0:
             print("From Restart")
-        for i in f.attrs:
-            if i != "iterations":
-                args[i] = f.attrs[i]
-
-
+            #hans_io.restart_cleanup(args,traj_interval)
+            pass
+            
+        sys.stdout.flush()
+        comm.Barrier()   
+        
+        sys.stdout.flush()           
     else:
         if rank == 0:
             print("New Run")
         
-
     if rank == 0:
         for arg in args:
                 print (f"{arg:<16} {args[arg]}")
 
-    # args = comm.bcast(args,root=0) #broadcasting input arguments
-    # directory = comm.bcast(directory,root=0) #broadcasting input arguments
 
     move_ratio=NS.default_move_ratio(args) #generating a move ratio
 
@@ -104,12 +107,16 @@ def main():
     NS.alk.alkane_set_dh_max(0.4)
     NS.alk.alkane_set_dv_max(2.0)
 
+    dstretch = 1.0  # initial stretch and shear move sizes
+    dshear = 1.0
+
 
 
     if not from_restart:
         NS.create_initial_configs(args) #creating initial configs
         NS.perturb_initial_configs(args,move_ratio, 50) #generating random box sizes
     else:
+        f = h5py.File(args["restart_file"], "r")
         for iwalker in range(1,args["nwalkers"]+1):
             try:
                 groupname = f"walker_{rank}_{iwalker:04d}"
@@ -127,7 +134,6 @@ def main():
     vols=[NS.alk.box_compute_volume(i) for i in range(1,args["nwalkers"]+1)]
 
     mc_adjust_interval = (args["nwalkers"]*size)//2 #ns_adjust interval steps, same as pymatnest
-    total_rate = np.zeros(6)
 
     dof = 0
     if move_ratio[0] != 0:
@@ -142,11 +148,11 @@ def main():
     if rank == 0:
         f = open(f"volumes.txt","a+")
         if not from_restart:
-            f.write(f'{args["nwalkers"]} {1} {dof} {False} {args["nchains"]} \n')
+            f.write(f'{args["nwalkers"]*size} {1} {dof} {False} {args["nchains"]} \n')
 #######################################################################################
 # NESTED SAMPLING LOOP                                                                #
 #######################################################################################
-    t0 = timer()
+    ns_t0 = timer()
     interrupted = False
     #signal.signal(signal.SIGTERM, NS.signal_handler)
     for i in range(args["prev_iters"],args["prev_iters"]+int(args["iterations"])):
@@ -172,7 +178,7 @@ def main():
 
 
         if rank == vol_max_index[0]:
-            if i%100 == 0:
+            if i%traj_interval == 0:
                 hans_io.write_to_extxyz(args,vol_max_index[1]+1, filename=f"traj.extxyz")
                 #print(i, vol_max)
             active_walker = vol_max_index[1]
@@ -190,13 +196,15 @@ def main():
         if i%mc_adjust_interval == 0:
             r, dshear,dstretch = NS.adjust_mc_steps(args,comm,move_ratio,vol_max,walklength = mc_adjust_wl, 
                       min_dstep=min_dstep, dv_max=dv_max,dr_max=dr_max,dshear = dshear, dstretch = dstretch)
+            #Adjusting length of step sizes based on trial acceptance rates.
             if rank == 0:
                 print(i,vol_max,r)
 
         ####restart handler
 
+        t1 = MPI.Wtime()
         if rank == 0:
-            if MPI.Wtime() - args["time"] < 30.0:
+            if args["time"] - (t1-t0) < 30.0:
                 interrupted == True
 
         interrupted = comm.bcast(interrupted,root=0)
@@ -212,15 +220,14 @@ def main():
                 pass
 
 #######################################################################################
-# END NESTED SAMPLING LOOP                                                                #
+# END NESTED SAMPLING LOOP                                                            #
 #######################################################################################
-# #print(NS.alk.alkane_get_dv_max(),NS.alk.alkane_get_dr_max(),dshear,dstretch, rank)
     if rank == 0:
         f.close()
 
-    t2 = timer()
+    ns_t1 = timer()
     if rank == 0:
-        print("NS RUN TIME TAKEN =", t2-t0)            
+        print("NS RUN TIME TAKEN =", ns_t1-ns_t0)            
         print("writing restart")
     hans_io.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
 
@@ -235,6 +242,5 @@ if __name__ == "__main__":
     main()
     # prof.disable()
     # prof.dump_stats(f"mpihans{rank}.profile")
-    # print("All good G")
     exit()
 

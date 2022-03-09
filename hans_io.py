@@ -2,6 +2,8 @@ import h5py
 import NS_hsa as NS
 from mpi4py import MPI
 import argparse
+import sys
+import ase.io
 
 def parse_args():
 
@@ -47,8 +49,6 @@ def read_hans_file(filename: str = "input.txt"):
         data["min_aspect_ratio"] = float(data["min_aspect_ratio"])
     else:
         data["min_aspect_ratio"] = 0.8
-    if not "restart_file" in data:
-        data["restart_file"] = "restart.hdf5"
     return data
 
 def write_to_restart(args,comm,filename = "restart.hdf5",i=0):
@@ -98,3 +98,22 @@ def write_to_extxyz(args,ibox=1,filename="traj.extxyz", parallel = False):
 
     NS.io.write(filename, max_vol_config, append = True, parallel=parallel)
     return
+
+def restart_cleanup(args,traj_interval=100):
+    old_vol_file = open("volumes.txt", "r+")
+    lines  = old_vol_file.readlines()
+    old_vol_file.close()
+    if (len(lines) - 2) > args["prev_iters"]:
+        print("Warning, restarting from an older file, data may be overwritten/deleted")
+        sys.stdout.flush()
+        lines = lines[:(args["prev_iters"]+1)]
+        new_vol_file =  open("volumes.txt","w+")
+        
+        for line in lines:
+            new_vol_file.write(line)
+        sys.stdout.flush()
+        new_vol_file.close()
+        n_ase_images  = max(args["prev_iters"]//traj_interval,1)
+        old_images = ase.io.read("traj.extxyz",f":{n_ase_images}")
+        ase.io.write("traj.extxyz", old_images)
+        sys.stdout.flush()

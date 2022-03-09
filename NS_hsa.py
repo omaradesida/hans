@@ -5,14 +5,10 @@ import sys
 import copy
 from ase import io
 from timeit import default_timer as timer
-import multiprocessing as mp
-from functools import partial
-from itertools import repeat
-import cProfile
+#import cProfile
 from mpi4py import MPI
 
 #for reading/writing
-import h5py
 
 
 
