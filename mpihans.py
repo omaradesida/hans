@@ -75,8 +75,8 @@ def main():
         f.close()
         if rank == 0:
             print("From Restart")
-            #hans_io.restart_cleanup(args,traj_interval)
-            pass
+            hans_io.restart_cleanup(args,traj_interval)
+            # pass
             
         sys.stdout.flush()
         comm.Barrier()   
@@ -199,6 +199,7 @@ def main():
             #Adjusting length of step sizes based on trial acceptance rates.
             if rank == 0:
                 print(i,vol_max,r)
+                sys.stdout.flush()
 
         ####restart handler
 

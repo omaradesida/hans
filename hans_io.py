@@ -103,7 +103,7 @@ def restart_cleanup(args,traj_interval=100):
     old_vol_file = open("volumes.txt", "r+")
     lines  = old_vol_file.readlines()
     old_vol_file.close()
-    if (len(lines) - 2) > args["prev_iters"]:
+    if (len(lines) - 1) > args["prev_iters"]:
         print("Warning, restarting from an older file, data may be overwritten/deleted")
         sys.stdout.flush()
         lines = lines[:(args["prev_iters"]+1)]
@@ -114,6 +114,5 @@ def restart_cleanup(args,traj_interval=100):
         sys.stdout.flush()
         new_vol_file.close()
         n_ase_images  = max(args["prev_iters"]//traj_interval,1)
-        old_images = ase.io.read("traj.extxyz",f":{n_ase_images}")
-        ase.io.write("traj.extxyz", old_images)
-        sys.stdout.flush()
+        old_images = ase.io.read("traj.extxyz",f":{n_ase_images}", parallel = False)
+        ase.io.write("traj.extxyz", old_images, parallel = False, append = False )
