@@ -78,10 +78,8 @@ def main():
             hans_io.restart_cleanup(args,traj_interval)
             # pass
             
-        sys.stdout.flush()
         comm.Barrier()   
         
-        sys.stdout.flush()           
     else:
         if rank == 0:
             print("New Run")
@@ -199,7 +197,6 @@ def main():
             #Adjusting length of step sizes based on trial acceptance rates.
             if rank == 0:
                 print(i,vol_max,r)
-                sys.stdout.flush()
 
         ####restart handler
 
@@ -213,8 +210,9 @@ def main():
             if rank == 0:
                 print("Out of allocated time, writing to file and exiting")
             break
-        if i+1 % 50000 ==0:
+        if (i+1) % 50000 ==0:
             hans_io.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
+            print("wrote to restart")
             try:
                 os.remove(f"restart.{i-100000}.hdf5")
             except:
