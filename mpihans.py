@@ -201,8 +201,8 @@ def main():
         ####restart handler
 
         t1 = MPI.Wtime()
-        if rank == 0:
-            if args["time"] - (t1-t0) < 30.0:
+        if rank == 0:            
+            if (args["time"] - (t1-t0)) < 300.0: 
                 interrupted == True
 
         interrupted = comm.bcast(interrupted,root=0)
@@ -213,10 +213,10 @@ def main():
         if (i+1) % 50000 ==0:
             hans_io.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
             print("wrote to restart")
-            try:
-                os.remove(f"restart.{i-100000}.hdf5")
-            except:
-                pass
+            # try:
+            #     os.remove(f"restart.{i-100000}.hdf5")
+            # except:
+            #     pass
 
 #######################################################################################
 # END NESTED SAMPLING LOOP                                                            #
@@ -233,7 +233,9 @@ def main():
     sys.stdout.flush()
     NS.alk.alkane_destroy()
     NS.alk.box_destroy()
+
     comm.Barrier()
+    
 
 if __name__ == "__main__":
     # prof = cProfile.Profile()
