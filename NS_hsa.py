@@ -405,7 +405,7 @@ def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
 
 
 
-def import_ase_to_ibox(atoms, ibox, ns_data):
+def import_ase_to_ibox(atoms, ibox, ns_data, scaling = 1.0):
     """Inputs an ASE atoms object into a simulation cell.
     Arguments:
         atoms: ns_data object containing the parameters for the simulation.
@@ -425,14 +425,14 @@ def import_ase_to_ibox(atoms, ibox, ns_data):
 
     if cell_vectors.size == 3:
         cell_vectors *= np.eye(3)
-    alk.box_set_cell(int(ibox),cell_vectors)
+    alk.box_set_cell(int(ibox),cell_vectors*scaling)
 
     positions = atoms.get_positions()
 
     for ichain in range(1,nchains+1):
         chain = alk.alkane_get_chain(ichain,int(ibox))
         for ibead in range(nbeads):
-            chain[ibead][:] = positions[(ichain-1)*nbeads+ibead][:]
+            chain[ibead][:] = positions[(ichain-1)*nbeads+ibead][:]*scaling
 
 
     return
