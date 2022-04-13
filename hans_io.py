@@ -1,5 +1,5 @@
 import h5py
-import NS_hsa as NS
+import NesSa as NS
 from mpi4py import MPI
 import argparse
 import sys
@@ -19,20 +19,24 @@ def parse_args():
 def read_hans_file(filename: str = "input.txt"):
     """Parse input from a file"""
     data = {}
-    f = open(filename, "r")
-    inputs=f.readlines()
-    inputs=[line for line in inputs if line]
+    f = sys.stdin.read()
+    print(f)
+    print("STD IN ^")
+    inputs=f.split("\n")
     for line in inputs:
         if not line.startswith('#'):
             key,value=line.split("=")
             data[key.strip()] = value.strip()
-    f.close()
     data["nchains"] = int(data["nchains"])
     data["nbeads"] = int(data["nbeads"])
     data["nwalkers"] = int(data["nwalkers"])
     data["walklength"] = int(data["walklength"])
     data["iterations"] = float(data["iterations"])
     data["time"] = float(data["time"])
+    if "analyse" in data:
+        data["analyse"] =int(data["analyse"])
+    else:
+        data["analyse"] = 0
     if "bondlength" in data:
         data["bondlength"] = float(data["bondlength"])
     else:

@@ -1,7 +1,7 @@
 from timeit import default_timer as timer
 import sys
 from mpi4py import MPI
-import NS_hsa as NS
+import NesSa as NS
 import hans_io
 #from numpy.random import MT19937
 #from numpy.random import RandomState, SeedSequence
@@ -9,6 +9,7 @@ import os
 import ase.io
 import h5py
 import numpy as np
+import nsa
 #import signal
 #import cProfile
 
@@ -208,11 +209,14 @@ def main():
         interrupted = comm.bcast(interrupted,root=0)
         if interrupted:
             if rank == 0:
+                f.close()
                 print("Out of allocated time, writing to file and exiting")
             break
         if (i+1) % 50000 ==0:
             hans_io.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
-            print("wrote to restart")
+            sys.stdout.flush()
+            if rank ==0:
+                print("wrote to restart")
             # try:
             #     os.remove(f"restart.{i-100000}.hdf5")
             # except:
@@ -235,6 +239,31 @@ def main():
     NS.alk.box_destroy()
 
     comm.Barrier()
+
+
+###analysis####
+    if args["analyse"]:
+        from contextlib import redirect_stdout
+        print("running ns_analyse")
+        nsa_args = {"T_min": 0.001,
+                "dT": 0.001,
+                "n_T": 2000,
+                "kB": 1.0,
+                "accurate_sum": False,
+                "verbose":False,
+                "profile":False,
+                "skip":0,
+                "line_end":None,
+                "interval":1,                     
+                "delta_pressure":0.0,
+                "dump_terms":-1.0,
+                "entropy":False,
+                "quiet":False,
+                "kolmogorov_smirnov_test":False,
+                "files":"volumes.txt"}
+        with open('ns_analyse.out', 'w') as f:
+            with redirect_stdout(f):
+                nsa.analyse(nsa_args)
     
 
 if __name__ == "__main__":

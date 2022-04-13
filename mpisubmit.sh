@@ -1,10 +1,11 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=8
+#SBATCH --ntasks-per-node=4
 #SBATCH --mem-per-cpu=2012
 #SBATCH --time=00:10:00
 #SBATCH --cpus-per-task=1
-#SBATCH --partition=hodgkin
+#SBATCH --partition=hetmathsys
+##SBATCH --signal=B:TERM@30
  
 
 
@@ -18,7 +19,9 @@
 
 
 
-srun -n 8 python mpihans.py > MPI_race1.out
+srun -n 4 python mpihans.py<input.txt #> MPI_hans.out
+# srun --signal=B:USR1@30 python signal_test.py > signal_test.out
+
 
 
 
