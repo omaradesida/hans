@@ -1,5 +1,5 @@
 import h5py
-import NesSa as NS
+from NesSa import MCNS as NS
 from mpi4py import MPI
 import argparse
 import sys
@@ -16,12 +16,10 @@ def parse_args():
 
     return parser.parse_args()
 
-def read_hans_file(filename: str = "input.txt"):
+def read_hans_file():
     """Parse input from a file"""
     data = {}
     f = sys.stdin.read()
-    print(f)
-    print("STD IN ^")
     inputs=f.split("\n")
     for line in inputs:
         if not line.startswith('#'):
@@ -33,6 +31,10 @@ def read_hans_file(filename: str = "input.txt"):
     data["walklength"] = int(data["walklength"])
     data["iterations"] = float(data["iterations"])
     data["time"] = float(data["time"])
+    if "initial_walk" in data:
+        data["initial_walk"] =int(data["initial_walk"])
+    else:
+        data["initial_walk"] = 1000
     if "analyse" in data:
         data["analyse"] =int(data["analyse"])
     else:

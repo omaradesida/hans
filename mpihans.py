@@ -1,15 +1,16 @@
 from timeit import default_timer as timer
 import sys
 from mpi4py import MPI
-import NesSa as NS
-import hans_io
+from NesSa import MCNS as NS
+from NesSa import NSio
 #from numpy.random import MT19937
 #from numpy.random import RandomState, SeedSequence
 import os
 import ase.io
 import h5py
 import numpy as np
-import nsa
+from NesSa import ns_analyse_main
+
 #import signal
 #import cProfile
 
@@ -41,8 +42,8 @@ def main():
     args = {}
     from_restart = None
     if rank == 0:
-        cl_args = hans_io.parse_args()
-        args = hans_io.read_hans_file(cl_args.input_file) #parsing input file
+        #cl_args = hans_io.parse_args()
+        args = NSio.read_hans_file() #parsing input file
         if "from_restart" in args and int(args["from_restart"]):
                 print(f"Attempting to restart from {args['directory']}")
                 from_restart = True
@@ -76,7 +77,7 @@ def main():
         f.close()
         if rank == 0:
             print("From Restart")
-            hans_io.restart_cleanup(args,traj_interval)
+            NSio.restart_cleanup(args,traj_interval)
             # pass
             
         comm.Barrier()   
@@ -112,9 +113,17 @@ def main():
 
 
     if not from_restart:
-        NS.create_initial_configs(args) #creating initial configs
-        NS.perturb_initial_configs(args,move_ratio, 50) #generating random box sizes
-    else:
+        if "initial_config" in args:
+            if rank == 0:
+                print("Loading initial config")
+
+            for i in range(args["nwalkers"]):
+                initial_config = ase.io.read(args["initial_config"])
+                NS.import_ase_to_ibox(initial_config,i+1,args)
+        else:
+            NS.create_initial_configs(args) #creating initial configs
+        NS.perturb_initial_configs(args,move_ratio, args["initial_walk"]) #random walk helps to distribute box sizes.
+    else: # load from restart
         f = h5py.File(args["restart_file"], "r")
         for iwalker in range(1,args["nwalkers"]+1):
             try:
@@ -132,8 +141,10 @@ def main():
 
     vols=[NS.alk.box_compute_volume(i) for i in range(1,args["nwalkers"]+1)]
 
-    mc_adjust_interval = (args["nwalkers"]*size)//2 #ns_adjust interval steps, same as pymatnest
+    mc_adjust_interval = max((args["nwalkers"]*size)//2,1) #ns_adjust interval steps, same as pymatnest
 
+
+#calculating degrees of freedom
     dof = 0
     if move_ratio[0] != 0:
         dof+= args["nchains"]
@@ -178,7 +189,7 @@ def main():
 
         if rank == vol_max_index[0]:
             if i%traj_interval == 0:
-                hans_io.write_to_extxyz(args,vol_max_index[1]+1, filename=f"traj.extxyz")
+                NSio.write_to_extxyz(args,vol_max_index[1]+1, filename=f"traj.extxyz")
                 #print(i, vol_max)
             active_walker = vol_max_index[1]
             NS.import_ase_to_ibox(config_to_clone,active_walker+1,args)
@@ -199,7 +210,7 @@ def main():
             if rank == 0:
                 print(i,vol_max,r)
 
-        ####restart handler
+        ####restart handler####
 
         t1 = MPI.Wtime()
         if rank == 0:            
@@ -213,7 +224,7 @@ def main():
                 print("Out of allocated time, writing to file and exiting")
             break
         if (i+1) % 50000 ==0:
-            hans_io.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
+            NSio.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
             sys.stdout.flush()
             if rank ==0:
                 print("wrote to restart")
@@ -232,7 +243,7 @@ def main():
     if rank == 0:
         print("NS RUN TIME TAKEN =", ns_t1-ns_t0)            
         print("writing restart")
-    hans_io.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
+    NSio.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
 
     sys.stdout.flush()
     NS.alk.alkane_destroy()
@@ -263,7 +274,7 @@ def main():
                 "files":"volumes.txt"}
         with open('ns_analyse.out', 'w') as f:
             with redirect_stdout(f):
-                nsa.analyse(nsa_args)
+                ns_analyse_main.analyse(nsa_args)
     
 
 if __name__ == "__main__":
