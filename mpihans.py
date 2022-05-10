@@ -1,7 +1,6 @@
 from timeit import default_timer as timer
 import sys
 from mpi4py import MPI
-from sympy import C
 from NesSa import MCNS as NS
 from NesSa import NSio
 #from numpy.random import MT19937
