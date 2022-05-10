@@ -22,39 +22,35 @@ def read_hans_file():
     f = sys.stdin.read()
     inputs=f.split("\n")
     for line in inputs:
-        if not line.startswith('#'):
+        if (not line.startswith('#') and line != ''):
             key,value=line.split("=")
             data[key.strip()] = value.strip()
-    data["nchains"] = int(data["nchains"])
-    data["nbeads"] = int(data["nbeads"])
-    data["nwalkers"] = int(data["nwalkers"])
-    data["walklength"] = int(data["walklength"])
-    data["iterations"] = float(data["iterations"])
-    data["time"] = float(data["time"])
-    if "initial_walk" in data:
-        data["initial_walk"] =int(data["initial_walk"])
-    else:
+    float_keys = ["bondlength","bondangle","min_angle","min_aspect_ratio", "pressure", "upper_bound", "lower_bound", "time"]
+    int_kets = ["nchains","nbeads","nwalkers","walklength","initial_walk","analyse", "equil_iter", "main_iter", "index"]
+    for key in float_keys:
+        if key in data:
+            data[key] = float(data[key])
+    for key in int_kets:
+        if key in data:
+            data[key] = int(data[key])
+    if not "initial_walk" in data:
         data["initial_walk"] = 1000
-    if "analyse" in data:
-        data["analyse"] =int(data["analyse"])
-    else:
+    if not "analyse" in data:
         data["analyse"] = 0
-    if "bondlength" in data:
-        data["bondlength"] = float(data["bondlength"])
-    else:
+    if not "bondlength" in data:
         data["bondlength"] = 0.4
-    if "bondangle" in data:
-        data["bondangle"] = float(data["bondangle"])
-    else:
+    if not "bondangle" in data:
         data["bondangle"] = 109.7
-    if "min_angle" in data:
-        data["min_angle"] = float(data["bondlength"])
-    else:
+    if not "min_angle" in data:
         data["min_angle"] = 45.0
-    if "min_aspect_ratio" in data:
-        data["min_aspect_ratio"] = float(data["min_aspect_ratio"])
-    else:
+    if  not "min_aspect_ratio" in data:
         data["min_aspect_ratio"] = 0.8
+    if not "min_aspect_ratio" in data:
+        data["min_aspect_ratio"] = 0.8
+
+
+
+    
     return data
 
 def write_to_restart(args,comm,filename = "restart.hdf5",i=0):

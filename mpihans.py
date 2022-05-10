@@ -50,15 +50,15 @@ def main():
                 directory = args["directory"]
         else:
             from_restart = False
-            if "directory" in args:
-                dir_prefix = args["directory"]
-            else:
-                dir_prefix = f"NeSa_{args['nchains']}_{args['nbeads']}mer.{args['nwalkers']*size}.{args['walklength']*size}"
-                i_n = 1
+        if "directory" in args:
+            dir_prefix = args["directory"]
+        else:
+            dir_prefix = f"NeSa_{args['nchains']}_{args['nbeads']}mer.{args['nwalkers']*size}.{args['walklength']*size}"
+            i_n = 1
             while os.path.exists(f"{dir_prefix}.{i_n}/"):
                 i_n += 1
             directory = f"{dir_prefix}.{i_n}/"
-            os.mkdir(f"{directory}")
+        os.mkdir(f"{directory}")
 
     directory = comm.bcast(directory,root=0)
     os.chdir(f"{directory}")
@@ -85,6 +85,7 @@ def main():
     else:
         if rank == 0:
             print("New Run")
+            print("Files output to:",directory)
         
     if rank == 0:
         for arg in args:
@@ -159,6 +160,7 @@ def main():
         f = open(f"volumes.txt","a+")
         if not from_restart:
             f.write(f'{args["nwalkers"]*size} {1} {dof} {False} {args["nchains"]} \n')
+    sys.stdout.flush()
 #######################################################################################
 # NESTED SAMPLING LOOP                                                                #
 #######################################################################################

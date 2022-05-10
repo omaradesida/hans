@@ -443,9 +443,13 @@ def initialise_sim_cells(args, quiet):
         ns_data: ns_data object containing the parameters for the simulation."""
 
 
+     
+    
+
+
     # alk.random_set_random_seed(1)
     alk.box_set_quiet(quiet)
-    alk.box_set_num_boxes(int(args["nwalkers"])) #nwalkers+2 if debugging
+    alk.box_set_num_boxes(args["nwalkers"]) #nwalkers+2 if debugging
     alk.box_initialise()
     alk.box_set_pbc(1)
     alk.alkane_set_nchains(int(args["nchains"]))
