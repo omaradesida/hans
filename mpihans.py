@@ -1,6 +1,7 @@
 from timeit import default_timer as timer
 import sys
 from mpi4py import MPI
+from sympy import C
 from NesSa import MCNS as NS
 from NesSa import NSio
 #from numpy.random import MT19937
@@ -50,15 +51,15 @@ def main():
                 directory = args["directory"]
         else:
             from_restart = False
-        if "directory" in args:
-            dir_prefix = args["directory"]
-        else:
-            dir_prefix = f"NeSa_{args['nchains']}_{args['nbeads']}mer.{args['nwalkers']*size}.{args['walklength']*size}"
-            i_n = 1
-            while os.path.exists(f"{dir_prefix}.{i_n}/"):
-                i_n += 1
+            if "directory" in args:
+                dir_prefix = args["directory"]
+            else:
+                dir_prefix = f"NeSa_{args['nchains']}_{args['nbeads']}mer.{args['nwalkers']*size}.{args['walklength']*size}"
+                i_n = 1
+                while os.path.exists(f"{dir_prefix}.{i_n}/"):
+                    i_n += 1
             directory = f"{dir_prefix}.{i_n}/"
-        os.mkdir(f"{directory}")
+            os.mkdir(f"{directory}")
 
     directory = comm.bcast(directory,root=0)
     os.chdir(f"{directory}")
@@ -72,12 +73,16 @@ def main():
     if from_restart:
         f = h5py.File(args["restart_file"], "r")            
         for i in f.attrs:
-            if (i != "iterations") and (i!="restart_file"):
                 args[i] = f.attrs[i]
+                if isinstance(args[i],np.floating):
+                    args[i] = float(args[i])
+                elif isinstance(args[i],np.integer):
+                    args[i] = int(args[i])
+                else:
+                    continue
         f.close()
         if rank == 0:
-            print("From Restart")
-            NSio.restart_cleanup(args,traj_interval)
+                NSio.restart_cleanup(args,traj_interval)
             # pass
             
         comm.Barrier()   
@@ -89,7 +94,7 @@ def main():
         
     if rank == 0:
         for arg in args:
-                print (f"{arg:<16} {args[arg]}")
+                print (f"{arg:<16} {args[arg]}s")
 
 
     move_ratio=NS.default_move_ratio(args) #generating a move ratio
@@ -127,17 +132,15 @@ def main():
     else: # load from restart
         f = h5py.File(args["restart_file"], "r")
         for iwalker in range(1,args["nwalkers"]+1):
-            try:
-                groupname = f"walker_{rank}_{iwalker:04d}"
-                cell = f[groupname]["unitcell"][:]
-                NS.alk.box_set_cell(iwalker,cell)
-                new_coords = f[groupname]["coordinates"][:]
-                for ichain in range(0,args["nchains"]):
-                    coords = NS.alk.alkane_get_chain(ichain+1,iwalker)
-                    for ibead in range(args["nbeads"]):
-                        coords[ibead] = new_coords[ichain*args["nbeads"]+ibead]
-            except:
-                print(iwalker)
+            groupname = f"walker_{rank}_{iwalker:04d}"
+            cell = f[groupname]["unitcell"][:]
+            NS.alk.box_set_cell(iwalker,cell)
+            new_coords = f[groupname]["coordinates"][:]
+            for ichain in range(0,args["nchains"]):
+                coords = NS.alk.alkane_get_chain(ichain+1,iwalker)
+                for ibead in range(args["nbeads"]):
+                    coords[ibead] = new_coords[ichain*args["nbeads"]+ibead]
+
         f.close()
 
     vols=[NS.alk.box_compute_volume(i) for i in range(1,args["nwalkers"]+1)]

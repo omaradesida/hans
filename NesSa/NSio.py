@@ -26,11 +26,11 @@ def read_hans_file():
             key,value=line.split("=")
             data[key.strip()] = value.strip()
     float_keys = ["bondlength","bondangle","min_angle","min_aspect_ratio", "pressure", "upper_bound", "lower_bound", "time"]
-    int_kets = ["nchains","nbeads","nwalkers","walklength","initial_walk","analyse", "equil_iter", "main_iter", "index"]
+    int_keys = ["nchains","nbeads","nwalkers","walklength","initial_walk","analyse", "equil_iter", "main_iter", "index"]
     for key in float_keys:
         if key in data:
             data[key] = float(data[key])
-    for key in int_kets:
+    for key in int_keys:
         if key in data:
             data[key] = int(data[key])
     if not "initial_walk" in data:
