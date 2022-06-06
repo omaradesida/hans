@@ -26,4 +26,14 @@ As the system is athermal, the output isn't truly an energy, but a volume, and t
 
 NesSa is a module which also grants the ability to construct slightly different calculations using python, as well as provide some other useful functionalities which a user may require.
 
+## List of input arguments
+`analyse` int. Produce a compressibility vs pressure plot of the system once the simulation is finished. Should be 0 or 1.
+`bondangle` float. The angle formed by three consecutive spheres within a chain.
+`bondlength`  float. The distance between bonds within a chain.
+`directory` string. The folder to create if a new run is being started, or the folder to search inside for the restart file if a run is being continued.
+`min_aspect_ratio` float. Smallest allowed distance between parallel faces for cell normalised to unit volume. A higher value of MC_cell_min_aspect_ratio restricts the system to more cube-like cell shapes. Should be between 0 and 1.
+`nbeads` int. The number of beads per chain.
+`nchains` int. The number of the chains in each simulation cell
+`restart_file` string. The file from which to restart a run from.
+`walklength` int. The number of "sweeps" performed per iteration on each cpu. A sweep is defined as a number of Monte Carlo moves which should change each degree of freedom within the system once on average.
 
