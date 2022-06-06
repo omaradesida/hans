@@ -36,7 +36,7 @@ NesSa is a module which also grants the ability to construct slightly different 
 
 `directory` string. The folder to create if a new run is being started, or the folder to search inside for the restart file if a run is being continued.
 
-`min_aspect_ratio` float. Smallest allowed distance between parallel faces for cell normalised to unit volume. A higher value of MC_cell_min_aspect_ratio restricts the system to more cube-like cell shapes. Should be between 0 and 1.
+`min_aspect_ratio` float. Smallest allowed distance between parallel faces for cell normalised to unit volume. A higher value restricts the system to more cube-like cell shapes. Should be between 0 and 1.
 
 `nbeads` int. The number of beads per chain.
 
