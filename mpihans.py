@@ -125,7 +125,7 @@ def main():
 
             for i in range(args["nwalkers"]):
                 try:
-                    initial_config = ase.io.read(args["initial_config"])
+                    initial_config = ase.io.read(f'../{args["initial_config"]}')
                     NS.import_ase_to_ibox(initial_config,i+1,args)
                 except OSError:
                     print(f"Cannot locate {args['initial_config']} in {os.getcwd()}")
