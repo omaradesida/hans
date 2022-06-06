@@ -53,6 +53,7 @@ def main():
             if "directory" in args:
                 dir_prefix = args["directory"]
             else:
+                print("No directory specified, using default")
                 dir_prefix = f"NeSa_{args['nchains']}_{args['nbeads']}mer.{args['nwalkers']*size}.{args['walklength']*size}"
                 i_n = 1
                 while os.path.exists(f"{dir_prefix}.{i_n}/"):
@@ -93,7 +94,7 @@ def main():
         
     if rank == 0:
         for arg in args:
-                print (f"{arg:<16} {args[arg]}s")
+                print (f"{arg:<16} {args[arg]}")
 
 
     move_ratio=NS.default_move_ratio(args) #generating a move ratio
@@ -228,7 +229,12 @@ def main():
                 print("Out of allocated time, writing to file and exiting")
             break
         if (i+1) % 50000 ==0:
-            NSio.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
+            try:
+                os.remove("restart_backup.hdf5")
+                os.rename("restart.hdf5","restart_backup.hdf5")
+            except OSError:
+                pass
+            NSio.write_to_restart(args,comm,filename = "restart.hdf5",i=i)
             sys.stdout.flush()
             if rank ==0:
                 print("wrote to restart")

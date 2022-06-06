@@ -20,6 +20,9 @@ def read_hans_file():
     """Parse input from a file"""
     data = {}
     f = sys.stdin.read()
+    if f == "":
+        print("Error: No input file specified")
+        sys.exit(1)
     inputs=f.split("\n")
     for line in inputs:
         if (not line.startswith('#') and line != ''):
@@ -47,6 +50,8 @@ def read_hans_file():
         data["min_aspect_ratio"] = 0.8
     if not "min_aspect_ratio" in data:
         data["min_aspect_ratio"] = 0.8
+    if not "restart_file" in data:
+        data["restart_file"] = "restart.hdf5"
 
 
 
@@ -95,7 +100,7 @@ def write_to_extxyz(args,ibox=1,filename="traj.extxyz", parallel = False):
     nchains = args["nchains"]
 
 
-    max_vol_config = NS.mk_ase_config(ibox,nbeads,nchains)
+    max_vol_config = NS.mk_ase_config(ibox,nbeads,nchains, scaling = 1.0)
     max_vol_config.wrap()
 
     NS.io.write(filename, max_vol_config, append = True, parallel=parallel)
