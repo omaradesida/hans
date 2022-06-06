@@ -36,7 +36,11 @@ NesSa is a module which also grants the ability to construct slightly different 
 
 `directory` string. The folder to create if a new run is being started, or the folder to search inside for the restart file if a run is being continued.
 
+`initial_config` string. File to import for starting configurations. This configuration will be cloned and sent to all walkers, then undergoing a brief Monte Carlo walk before the run starts in order to randomise them. Useful if starting from particular structures such as ringed alkanes.
+
 `min_aspect_ratio` float. Smallest allowed distance between parallel faces for cell normalised to unit volume. A higher value restricts the system to more cube-like cell shapes. Should be between 0 and 1.
+
+`move_ratio` 6 floats separated by commas. Ratio of moves to use when performing Monte Carlo walks. Values correspond with "volume moves", "translational moves", "rotational moves", "dihedral moves", "shear moves", "stretch moves".
 
 `nbeads` int. The number of beads per chain.
 
@@ -44,5 +48,5 @@ NesSa is a module which also grants the ability to construct slightly different 
 
 `restart_file` string. The file from which to restart a run from.
 
-`walklength` int. The number of "sweeps" performed per iteration on each cpu. A sweep is defined as a number of Monte Carlo moves which should change each degree of freedom within the system once on average.
+`walklength` int. The number of "sweeps" performed per iteration on each cpu, constituting a Monte Carlo walk. A sweep is defined as a number of Monte Carlo moves which should change each degree of freedom within the system once on average.
 
