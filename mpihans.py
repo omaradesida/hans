@@ -122,14 +122,17 @@ def main():
         if "initial_config" in args:
             if rank == 0:
                 print("Loading initial config")
-
-            for i in range(args["nwalkers"]):
-                try:
+            
+            try:
+                for i in range(args["nwalkers"]):
                     initial_config = ase.io.read(f'../{args["initial_config"]}')
                     NS.import_ase_to_ibox(initial_config,i+1,args)
-                except OSError:
-                    print(f"Cannot locate {args['initial_config']} in {os.getcwd()}")
-                    sys.exit(1)
+            except OSError:
+                print(f"Cannot locate {args['initial_config']} in {os.getcwd()}")
+                sys.exit(1)
+            if 'initial_config' in globals():
+                assert(initial_config.get_number_of_atoms() == args["nwalkers"]*args["nbeads"]), "Initial config has wrong number of atoms"
+
         else:
             NS.create_initial_configs(args) #creating initial configs
         NS.perturb_initial_configs(args,move_ratio, args["initial_walk"]) #random walk helps to distribute box sizes.
