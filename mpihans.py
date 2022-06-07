@@ -236,8 +236,9 @@ def main():
                 print("Out of allocated time, writing to file and exiting")
             break
         if (i+1) % 50000 ==0:
-            try:
+            if os.path.exists("restart_backup.hdf5"):
                 os.remove("restart_backup.hdf5")
+            try:
                 os.rename("restart.hdf5","restart_backup.hdf5")
             except OSError:
                 pass
