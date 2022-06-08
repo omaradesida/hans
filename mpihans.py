@@ -71,8 +71,10 @@ def main():
         args["prev_iters"] = 0
 
     if from_restart:
-        f = h5py.File(args["restart_file"], "r")            
+        f = h5py.File(args["restart_file"], "r")
+
         for i in f.attrs:
+            if i != "restart_file":
                 args[i] = f.attrs[i]
                 if isinstance(args[i],np.floating):
                     args[i] = float(args[i])
@@ -238,10 +240,8 @@ def main():
         if (i+1) % 50000 ==0:
             if os.path.exists("restart_backup.hdf5"):
                 os.remove("restart_backup.hdf5")
-            try:
+            if os.path.exists("restart.hdf5"):
                 os.rename("restart.hdf5","restart_backup.hdf5")
-            except OSError:
-                pass
             NSio.write_to_restart(args,comm,filename = "restart.hdf5",i=i)
             sys.stdout.flush()
             if rank ==0:
