@@ -238,10 +238,11 @@ def main():
                 print("Out of allocated time, writing to file and exiting")
             break
         if (i+1) % 50000 ==0:
-            if os.path.exists("restart_backup.hdf5"):
-                os.remove("restart_backup.hdf5")
-            if os.path.exists("restart.hdf5"):
-                os.rename("restart.hdf5","restart_backup.hdf5")
+            if rank==0:
+                if os.path.exists("restart_backup.hdf5"):
+                    os.remove("restart_backup.hdf5")
+                if os.path.exists("restart.hdf5"):
+                    os.rename("restart.hdf5","restart_backup.hdf5")
             NSio.write_to_restart(args,comm,filename = "restart.hdf5",i=i)
             sys.stdout.flush()
             if rank ==0:
@@ -261,7 +262,12 @@ def main():
     if rank == 0:
         print("NS RUN TIME TAKEN =", ns_t1-ns_t0)            
         print("writing restart")
-    NSio.write_to_restart(args,comm,filename = f"restart.{i}.hdf5",i=i)
+
+        if os.path.exists("restart_backup.hdf5"):
+            os.remove("restart_backup.hdf5")
+        if os.path.exists("restart.hdf5"):
+            os.rename("restart.hdf5","restart_backup.hdf5")
+    NSio.write_to_restart(args,comm,filename = "restart.hdf5",i=i)
 
     sys.stdout.flush()
     NS.alk.alkane_destroy()
