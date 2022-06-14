@@ -10,3 +10,5 @@ energies.txt
 __pycache__/
 tests/
 *.txt
+.vscode/
+.gitignore
