@@ -1,11 +1,12 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks-per-node=4
 #SBATCH --mem-per-cpu=2012
-#SBATCH --time=1:00:00
+#SBATCH --time=00:10:00
 #SBATCH --cpus-per-task=1
-
-##SBATCH --exclude=markstein.epp.warwick.ac.uk 
+#SBATCH --partition=hetmathsys
+##SBATCH --signal=B:TERM@30
+ 
 
 
 # module purge
@@ -18,6 +19,12 @@
 
 
 
-srun python hans -i 2e4 -w 10 -l 10 -b 1 -c 32 -t 3600 -p 8 >> hsa_ns_output_new_parallel.txt
- 
+srun -n 4 python mpihans.py<input.txt #> MPI_hans.out
+# srun --signal=B:USR1@30 python signal_test.py > signal_test.out
+
+
+
+
+
+
 
