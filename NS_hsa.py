@@ -25,7 +25,6 @@ move_types = ['box','translate', 'rotate', 'dihedral', 'shear', 'stretch']
 
 ivol = 0; itrans = 1; irot = 2; idih = 3; ishear = 4; istr = 5
 
-
 def mk_ase_config(ibox, Nbeads, Nchains, scaling = 3.75):
     """Uses the current state of the alkane model to construct an ASE atoms object.
         Arguments:
@@ -142,6 +141,7 @@ def box_shear_step(ibox, step_size, aspect_ratio_limit = 0.8, angle_limit = 60):
         boltz: 0 if the proposed step has been rejected for being invalid, 1 if it is accepted.
         delta_H: Change in the unit cell, used in case the change in the cell should be reverted."""
 
+
     # pick random vector for shear direction
     #np.random.seed(10)
     rnd_vec_ind = int(np.floor(alk.random_uniform_random()*3))
@@ -216,6 +216,7 @@ def box_stretch_step(ibox,step_size, aspect_ratio_limit = 0.8, angle_limit = 60)
         boltz: 0 if the proposed step has been rejected for being invalid, 1 if it is accepted.
         delta_H: Change in the unit cell, used in case the change in the cell should be reverted."""
 
+
     cell = alk.box_get_cell(int(ibox))
     new_cell = cell.copy()
     rnd_v1_ind = int(np.floor(alk.random_uniform_random()*3))
@@ -256,6 +257,7 @@ dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8):
     #ns_data.step_sizes.update_steps()
 
     # print(alk.alkane_get_dv_max(), alk.alkane_get_dr_max())
+
     moves_accepted = np.zeros(6)
     moves_attempted = np.zeros(6)
     nbeads = ns_data["nbeads"]
@@ -313,6 +315,7 @@ dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8):
                 # Attempt a stretch move
                 itype = istr
                 boltz, delta_H = box_stretch_step(ibox, dstretch, min_ar,min_ang)
+
                 moves_attempted[itype] += 1
 
 
@@ -382,6 +385,7 @@ def clone_walker(ibox_source,ibox_clone):
             clone_chain[ibead][:] = original_chain[ibead][:]
       
 
+
 def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
     
     """ Runs a number of Monte Carlo steps on every simulation box, using the move_ratio assigned to it,
@@ -406,6 +410,7 @@ def perturb_initial_configs(ns_data, move_ratio, walk_length = 20):
 
 
 def import_ase_to_ibox(atoms, ibox, ns_data, scaling = 1.0):
+
     """Inputs an ASE atoms object into a simulation cell.
     Arguments:
         atoms: ns_data object containing the parameters for the simulation.
@@ -458,6 +463,14 @@ def initialise_sim_cells(args, quiet):
     alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
     alk.alkane_set_bondlength(float(args["bondlength"]))
     alk.alkane_set_bondangle(float(args["bondangle"]))
+
+def ase_MC_run(atoms, **kwargs):
+
+    import_ase_to_ibox(atoms, kwargs["ibox"], kwargs["ns_data"])
+
+    new_atoms = MC_run(**kwargs)
+
+    return new_atoms
 
 
 
