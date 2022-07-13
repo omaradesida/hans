@@ -42,7 +42,7 @@ def mk_ase_config(ibox, Nbeads, Nchains, scaling = 3.75):
     cell_vectors = alk.box_get_cell(int(ibox))
    
     for ichain in range(0, Nchains):
-        model_positions[Nbeads*ichain:Nbeads*ichain+Nbeads] = alk.alkane_get_chain(ichain+1, int(ibox))
+        model_positions[Nbeads*ichain:Nbeads*ichain+Nbeads] = alk.alkane_get_chain(int(ichain+1), int(ibox))
     
     confstring = "C"+str(Nbeads*Nchains)
     
@@ -279,7 +279,7 @@ dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8,pressure = 0):
 #             clone_walker(ibox,nwalkers+2)#backup box
             ichain = int(np.floor(alk.random_uniform_random()*nchains)) # picks a chain at random
             #should it be from 0 to nchains?
-            current_chain = alk.alkane_get_chain(ichain+1, int(ibox))
+            current_chain = alk.alkane_get_chain(int(ichain+1), int(ibox))
 
             backup_chain = current_chain.copy()
             xi = np.random.random()
@@ -292,17 +292,133 @@ dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8,pressure = 0):
             elif xi < move_prob[itrans]:
                 # Attempt a translation move
                 itype = itrans
-                boltz = alk.alkane_translate_chain(ichain+1, int(ibox))
+                boltz = alk.alkane_translate_chain(int(ichain+1), int(ibox))
                 moves_attempted[itrans] += 1
             elif xi < move_prob[irot]:
                 # Attempt a rotation move
                 itype = irot
-                boltz, quat = alk.alkane_rotate_chain(ichain+1, int(ibox), 0)
+                boltz, quat = alk.alkane_rotate_chain(int(ichain+1), int(ibox), 0)
                 moves_attempted[itype] += 1
             elif xi < move_prob[idih]:
                 # Attempt a dihedral angle move
                 itype = idih
-                boltz, bead1, angle = alk.alkane_bond_rotate(ichain+1, int(ibox), 1)
+                boltz, bead1, angle = alk.alkane_bond_rotate(int(ichain+1), int(ibox), 1)
+                moves_attempted[itype] += 1
+            elif xi < move_prob[ishear]:
+                # Attempt a shear move
+                itype = ishear
+                boltz, delta_H = box_shear_step(ibox, dshear, min_ar, min_ang)
+                moves_attempted[itype] += 1
+            else:
+                # Attempt a stretch move
+                itype = istr
+                boltz, delta_H = box_stretch_step(ibox, dstretch, min_ar,min_ang)
+                moves_attempted[itype] += 1
+
+
+            #Check which type of move and whether or not to accept
+                    
+            if (itype==ivol):
+                new_volume = alk.box_compute_volume(int(ibox))
+                if (np.random.random() < boltz) and (new_volume - volume_limit) < sys.float_info.epsilon:
+                    moves_accepted[itype]+=1
+
+                else:
+                    #revert volume move
+                    #clone_walker(volume_box, ibox)
+                    dumboltz = alk.alkane_box_resize(pressure, int(ibox), 1)
+
+            
+            elif(itype == ishear or itype == istr):
+                if boltz:
+                    moves_accepted[itype]+=1
+
+                
+                else:
+                    neg_delta_H = -1.0*delta_H
+                    #print(neg_delta_H)
+                    alk.alkane_change_box(int(ibox), neg_delta_H)
+
+                   
+            else:
+                if (np.random.random() < boltz):
+                #accept the move
+                    moves_accepted[itype]+=1
+
+
+                else:
+                    #reject the move
+                    for ibead in range(nbeads):
+                        current_chain[ibead] = backup_chain[ibead]
+
+            imove += 1
+        isweeps +=1
+    moves_attempted = np.where(moves_attempted == 0, 1, moves_attempted)
+    moves_acceptance_rate = moves_accepted/moves_attempted
+
+    if return_ase:
+        atoms =  mk_ase_config(ibox, nbeads, nchains, scaling=1)
+
+        return atoms
+    else:
+        return alk.box_compute_volume(int(ibox)), moves_acceptance_rate
+
+def MC_run_partial(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max, return_ase = False,
+dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8,pressure = 0, chain_list = None):
+
+    if chain_list is None:
+        chain_list = np.arange(1,ns_data["nchains"])
+
+    #ns_data.step_sizes.update_steps()
+
+    # print(alk.alkane_get_dv_max(), alk.alkane_get_dr_max())
+    moves_accepted = np.zeros(6)
+    moves_attempted = np.zeros(6)
+    nbeads = ns_data["nbeads"]
+    nchains = ns_data["nchains"]
+    
+    isweeps = 0
+    pressure = pressure
+    move_prob = np.cumsum(move_ratio)/np.sum(move_ratio)
+    
+    if nbeads == 1:
+        moves_per_sweep = nchains+7 
+    elif nbeads <=3:
+        moves_per_sweep = 2*nchains+7
+    else:
+        moves_per_sweep = (nbeads-1)*nchains+7 
+    #moves_per_sweep selected such that every degree of freedom should 
+    #be changed once on average when a sweep is performed.
+    while isweeps < sweeps:
+        imove=0
+        while imove< moves_per_sweep:
+#             clone_walker(ibox,nwalkers+2)#backup box
+            ichain = chain_list[int(np.floor(alk.random_uniform_random()*len(chain_list)))] # picks a chain at random
+            #should it be from 0 to nchains?
+            current_chain = alk.alkane_get_chain(int(ichain+1), int(ibox))
+
+            backup_chain = current_chain.copy()
+            xi = np.random.random()
+            if xi < move_prob[ivol]:
+                # Attempt a volume move
+                itype = ivol
+                #clone_walker(ibox, volume_box) #backing up the volume
+                boltz = alk.alkane_box_resize(pressure, int(ibox), 0)
+                moves_attempted[itype] += 1
+            elif xi < move_prob[itrans]:
+                # Attempt a translation move
+                itype = itrans
+                boltz = alk.alkane_translate_chain(int(ichain+1), int(ibox))
+                moves_attempted[itrans] += 1
+            elif xi < move_prob[irot]:
+                # Attempt a rotation move
+                itype = irot
+                boltz, quat = alk.alkane_rotate_chain(int(ichain+1), int(ibox), 0)
+                moves_attempted[itype] += 1
+            elif xi < move_prob[idih]:
+                # Attempt a dihedral angle move
+                itype = idih
+                boltz, bead1, angle = alk.alkane_bond_rotate(int(ichain+1), int(ibox), 1)
                 moves_attempted[itype] += 1
             elif xi < move_prob[ishear]:
                 # Attempt a shear move

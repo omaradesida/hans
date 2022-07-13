@@ -51,15 +51,21 @@ def main():
         else:
             from_restart = False
             if "directory" in args:
-                dir_prefix = args["directory"]
+                if args["directory"] == "gen_prefix":
+                    print("Generating folder(s) with appropriate prefix to for NS runs")
+                    dir_prefix = f"NeSa_{args['nchains']}_{args['nbeads']}mer.{args['nwalkers']*size}.{args['walklength']*size}"
+                    i_n = 1
+                    while os.path.exists(f"{dir_prefix}.{i_n}/"):
+                        i_n += 1
+                    directory = f"{dir_prefix}.{i_n}/"
+                else:
+                    directory = args["directory"]
+                    print(f"Using directory {directory} specified in input file.")
+                os.mkdir(f"{directory}")
             else:
                 print("No directory specified, using default")
-                dir_prefix = f"NeSa_{args['nchains']}_{args['nbeads']}mer.{args['nwalkers']*size}.{args['walklength']*size}"
-                i_n = 1
-                while os.path.exists(f"{dir_prefix}.{i_n}/"):
-                    i_n += 1
-            directory = f"{dir_prefix}.{i_n}/"
-            os.mkdir(f"{directory}")
+                directory = "./"
+
 
     directory = comm.bcast(directory,root=0)
     os.chdir(f"{directory}")
