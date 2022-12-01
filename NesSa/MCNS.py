@@ -5,6 +5,7 @@ import sys
 import copy
 from ase import io
 from timeit import default_timer as timer
+import math
 #import cProfile
 from mpi4py import MPI
 
@@ -250,12 +251,39 @@ def box_stretch_step(ibox,step_size, aspect_ratio_limit = 0.8, angle_limit = 60)
     
     return boltz, delta_H
 
+def one_direction_vol_move(pressure,ibox,reject = 0):
+    old_vol = alk.box_compute_volume(int(ibox))
+    global old_cell
+    if reject == 0:
+        old_cell = alk.box_get_cell(int(ibox))
+        scale = math.exp(alk.random_uniform_random()*alk.alkane_get_dv_max())
+        alk.alkane_box_scale(ibox,scale,1.,1.)
+        
+        cur_vol = alk.box_compute_volume(int(ibox))
+        delta_vol = cur_vol - old_vol
+
+        if cur_vol <= alk.box_compute_volume(int(ibox)):
+            boltz = math.exp(-pressure*delta_vol+alk.alkane_get_nchains()*math.log(cur_vol/old_vol))
+    else:
+        alk.alkane_change_box(ibox,old_cell)
+        boltz = 1
+
+
+
+    return int(boltz)
+
+
 def MC_run(ns_data, sweeps, move_ratio, ibox, volume_limit = sys.float_info.max, return_ase = False,
-dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8,pressure = 0):
+dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8,pressure = 0, two_phase=False):
 
     #ns_data.step_sizes.update_steps()
 
     # print(alk.alkane_get_dv_max(), alk.alkane_get_dr_max())
+    if two_phase:
+        vol_move_func = one_direction_vol_move
+    else:
+        vol_move_func = alk.alkane_box_resize
+
     moves_accepted = np.zeros(6)
     moves_attempted = np.zeros(6)
     nbeads = ns_data["nbeads"]
@@ -326,7 +354,7 @@ dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8,pressure = 0):
                 else:
                     #revert volume move
                     #clone_walker(volume_box, ibox)
-                    dumboltz = alk.alkane_box_resize(pressure, int(ibox), 1)
+                    dumboltz = vol_move_func(pressure, int(ibox), 1)
 
             
             elif(itype == ishear or itype == istr):
@@ -391,7 +419,7 @@ dshear = 1.0, dstretch = 1.0, min_ang = 60, min_ar = 0.8,pressure = 0, chain_lis
     #be changed once on average when a sweep is performed.
     while isweeps < sweeps:
         imove=0
-        while imove< moves_per_sweep:
+        while imove < moves_per_sweep:
 #             clone_walker(ibox,nwalkers+2)#backup box
             ichain = chain_list[int(np.floor(alk.random_uniform_random()*len(chain_list)))] # picks a chain at random
             #should it be from 0 to nchains?
@@ -582,10 +610,13 @@ def initialise_sim_cells(args, quiet):
 
 def default_move_ratio(ns_data):
     if "move_ratio" in ns_data:
-        move_ratio = [float(i) for i in ns_data["move_ratio"].split(',')]
-        assert len(move_ratio) == 6, "Move ratio array should be of length 6."
-        pass
-        return move_ratio
+        if not ns_data["from_restart"]:
+            move_ratio = [float(i) for i in ns_data["move_ratio"].split(',')]
+            if (len(move_ratio) != 6):
+                raise Exception("Move ratio array should be of length 6.")
+        else:
+            move_ratio = ns_data["move_ratio"]
+        return np.array(move_ratio,dtype=np.float64)
     move_ratio = np.zeros(6)
     move_ratio[ivol] = 1
     move_ratio[itrans] = 3.0*ns_data["nchains"]
@@ -593,7 +624,7 @@ def default_move_ratio(ns_data):
     move_ratio[idih] = 1.0*max(((ns_data["nbeads"]-3.0)*(ns_data["nchains"]),0))
     move_ratio[ishear] = 3
     move_ratio[istr] = 3
-    return move_ratio
+    return np.array(move_ratio)
 
 def create_initial_configs(args, max_vol_per_atom = 15):
     cell_matrix = 0.999*np.eye(3)*np.cbrt(args["nbeads"]*args["nchains"]*max_vol_per_atom)#*np.random.uniform(0,1)
