@@ -28,8 +28,10 @@ def read_hans_file():
         if (not line.startswith('#') and line != ''):
             key,value=line.split("=")
             data[key.strip()] = value.strip()
-    float_keys = ["bondlength","bondangle","min_angle","min_aspect_ratio", "pressure", "upper_bound", "lower_bound", "time"]
-    int_keys = ["nchains","nbeads","nwalkers","walklength","initial_walk","analyse", "equil_iter", "main_iter", "index"]
+    float_keys = ["bondlength","bondangle","min_angle","min_aspect_ratio", 
+                "pressure", "upper_bound", "lower_bound", "time"]
+    int_keys = ["nchains","nbeads","nwalkers","walklength","initial_walk"
+                ,"analyse", "equil_iter", "main_iter", "index", "model_type"]
     for key in float_keys:
         if key in data:
             data[key] = float(data[key])
@@ -52,6 +54,8 @@ def read_hans_file():
         data["min_aspect_ratio"] = 0.8
     if not "restart_file" in data:
         data["restart_file"] = "restart.hdf5"
+    if not "model_type" in data:
+        data["model_type"] = 4
 
 
 

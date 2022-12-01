@@ -35,7 +35,7 @@ def main():
 
     mc_adjust_wl = max(10//size,1)
 
-    traj_interval = 100
+    traj_interval = 1000
     
     #############################################################################
     directory = None

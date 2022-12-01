@@ -576,6 +576,7 @@ def initialise_sim_cells(args, quiet):
     alk.box_set_use_verlet_list(0)   # Don't use Verlet lists either since CBMC moves quickly invalidate these
     alk.alkane_set_bondlength(float(args["bondlength"]))
     alk.alkane_set_bondangle(float(args["bondangle"]))
+    alk.alkane_set_model_type(int(args["model_type"]))
 
 
 
