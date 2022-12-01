@@ -16,10 +16,14 @@ def parse_args():
 
     return parser.parse_args()
 
-def read_hans_file():
+def read_hans_file(filename = None):
     """Parse input from a file"""
     data = {}
-    f = sys.stdin.read()
+    if filename is None:
+        f = sys.stdin.read()
+    else:
+        with open(filename,"tr") as inp_file:
+            f = inp_file.read()
     if f == "":
         print("Error: No input file specified")
         sys.exit(1)
@@ -30,12 +34,16 @@ def read_hans_file():
             data[key.strip()] = value.strip()
     float_keys = ["bondlength","bondangle","min_angle","min_aspect_ratio", "pressure", "upper_bound", "lower_bound", "time"]
     int_keys = ["nchains","nbeads","nwalkers","walklength","initial_walk","analyse", "equil_iter", "main_iter", "index"]
+    bool_keys=["profile"]
     for key in float_keys:
         if key in data:
             data[key] = float(data[key])
     for key in int_keys:
         if key in data:
             data[key] = int(data[key])
+    for key in bool_keys:
+        if key in data:
+            data[key] = bool(int(data[key]))
     if not "initial_walk" in data:
         data["initial_walk"] = 1000
     if not "analyse" in data:
@@ -58,7 +66,7 @@ def read_hans_file():
     
     return data
 
-def write_to_restart(args,comm,filename = "restart.hdf5",i=0):
+def write_to_restart(args,comm,filename = "restart.hdf5",i=0, dshear=None,dstretch = None):
     size = comm.Get_size()
     rank = comm.Get_rank()
     if rank==0:
@@ -66,6 +74,15 @@ def write_to_restart(args,comm,filename = "restart.hdf5",i=0):
         for j in args:
             f.attrs.create(j,args[j])
         f.attrs.create("prev_iters",i+1)
+        f.attrs.create("dv_max",NS.alk.alkane_get_dv_max())
+        f.attrs.create("dr_max",NS.alk.alkane_get_dr_max())
+        f.attrs.create("dt_max",NS.alk.alkane_get_dt_max())
+        f.attrs.create("dh_max",NS.alk.alkane_get_dh_max())
+        if not dshear is None:
+            f.attrs.create("dshear",dshear)
+            f.attrs.create("dstretch",dstretch)
+
+
         for iwalker in range(1,args["nwalkers"]+1):
             groupname = f"walker_{rank}_{iwalker:04d}"
             tempgrp = f.create_group(groupname)
@@ -91,6 +108,7 @@ def write_to_restart(args,comm,filename = "restart.hdf5",i=0):
     else:
         config_list=[NS.mk_ase_config(ibox+1,args["nbeads"],args["nchains"],1.0) for ibox in range(args["nwalkers"])]
         comm.ssend(config_list,0,tag=rank)
+    return
 
 def write_to_extxyz(args,ibox=1,filename="traj.extxyz", parallel = False):
     """Writes a single simulation box to file.
@@ -123,3 +141,4 @@ def restart_cleanup(args,traj_interval=100):
         n_ase_images  = max(args["prev_iters"]//traj_interval,1)
         old_images = ase.io.read("traj.extxyz",f":{n_ase_images}", parallel = False)
         ase.io.write("traj.extxyz", old_images, parallel = False, append = False )
+        return
